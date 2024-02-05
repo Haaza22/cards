@@ -3,7 +3,7 @@ import random
 
 class Deck:
     def __init__(self):
-        self.top = random.randint(1, 52)
+        self.top = random.randint(0, 51)
         self.size = 52
         self.in_deck = []
         # create deck
@@ -12,7 +12,7 @@ class Deck:
                 self.in_deck.append(Card(suit, num))
 
     def draw_card(self):
-        if self.size != 0:
+        if self.size > 0:
             ret = self.in_deck.pop(self.top)
             self.size = self.size - 1
             if self.size == 0:
