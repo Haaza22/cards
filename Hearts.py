@@ -100,7 +100,7 @@ def one_loop(current_player, start, on_table, who_played, current_turn_record, p
         return on_table, who_played, current_turn_record
 
 
-def round_over(who_played, on_table, won_cards, turn_record, current_turn_record):
+def round_over(who_played, on_table, won_cards, turn_record, current_turn_record, played_cards):
     round_winner = who_played[find_winner(on_table)]
 
     for card in on_table:
@@ -108,7 +108,10 @@ def round_over(who_played, on_table, won_cards, turn_record, current_turn_record
 
     turn_record.append(current_turn_record)
 
-    return won_cards, turn_record, round_winner
+    for i in range(2,6):
+        played_cards.append((current_turn_record[i].val, current_turn_record[i].suit))
+
+    return won_cards, turn_record, round_winner, played_cards
 
 
 def bonus(won_cards, turn_record):
