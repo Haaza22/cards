@@ -116,6 +116,7 @@ def train_q():
     behaviour=['Q', 'Q', 'Q', 'Q']
 
     while training:
+        print(current_training_round)
         # Heart setup
         played_cards = []
         hands, current_player = Hearts.setup(behaviour)
@@ -274,7 +275,7 @@ num_actions = len(action_space)
 q_table = np.zeros((num_states, num_actions))
 # print(q_table)
 
-training_route = True
+training_route = False
 
 if training_route:
     train_q()
