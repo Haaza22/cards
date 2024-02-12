@@ -57,6 +57,7 @@ class Hand:
         self.size = self.size - 1
         return discarding
 
+
 def print_deck(deck):
     for card in deck:
         card.print_card()
@@ -69,6 +70,27 @@ def deal_deck(deck, hand1, hand2, hand3, hand4, how_many):
         hand3.add_card(deck.draw_card())
         hand4.add_card(deck.draw_card())
     return deck, hand1, hand2, hand3, hand4
+
+
+def card_number(card):
+    # Takes a card in the form 'suitval' like 'H3' and assignes the number, with 2 of clubs as 1 and ace of spaces as 52
+    # Suit order is club, diamond, Heart, Spade
+    if card[0] == 'C':
+        # 1 to 13
+        card_num = 1
+    elif card[0] == 'D':
+        # 14 to 26
+        card_num = 14
+    elif card[0] == 'H':
+        # 27 to 39
+        card_num = 27
+    else:
+        # 40 to 52
+        card_num = 40
+
+    card_num = card_num + (int(card[1:len(card)]) - 2)
+
+    return card_num
 
 # testing
 # deck = Deck()

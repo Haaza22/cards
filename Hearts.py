@@ -36,6 +36,14 @@ def find_winner(table):
             winner = i
     return winner
 
+def find_wining_card(table):
+    given_suit = table[0].suit
+    highest = 0
+    for i in range(0, len(table)):
+        if table[i].suit == given_suit and table[i].val > highest:
+            highest = table[i].val
+    return str(given_suit)+str(highest)
+
 
 def count_points(won_cards):
     points = [0, 0, 0, 0]
