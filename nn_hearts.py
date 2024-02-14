@@ -120,7 +120,6 @@ def initialize_state_space():
 def get_state_index(state):
     # Convert the state tuple to a hashable representation
     index = 53 * state[0] + state[1]
-
     return index
 
 
