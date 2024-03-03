@@ -556,13 +556,13 @@ offset = 0
 
 for attribute, measurement in scores.items():
     rects = ax.bar(x + offset, measurement, width, label=attribute)
-    ax.bar_label(rects, padding=9)
+    ax.bar_label(rects, padding=10)
     offset += width  # Increase the offset for the next group of bars
 
 # Improve readability
 ax.set_ylabel('Games in this position', fontsize=12)
 ax.set_title('Average placements', fontsize=14)
-ax.set_xticks(x + width * 3, placements)
+ax.set_xticks(x + width * 10, placements)
 ax.legend(loc='upper left', fontsize=8, ncol=4)
 
 # Add grid lines
