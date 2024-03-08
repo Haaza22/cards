@@ -77,16 +77,16 @@ def card_number(card):
     # Suit order is club, diamond, Heart, Spade
     if card[0] == 'C':
         # 1 to 13
-        card_num = 1
+        card_num = 0
     elif card[0] == 'D':
         # 14 to 26
-        card_num = 14
+        card_num = 13
     elif card[0] == 'H':
         # 27 to 39
-        card_num = 27
+        card_num = 26
     else:
         # 40 to 52
-        card_num = 40
+        card_num = 39
 
     card_num = card_num + (int(card[1:len(card)]) - 2)
 

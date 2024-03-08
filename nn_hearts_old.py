@@ -1,18 +1,11 @@
-import random
+]import random
 import Card_Manip
 import Hearts
 import numpy as np
 import itertools
 import matplotlib.pyplot as plt
 import time
-
-# import os
-# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-# import logging
-# logging.getLogger('tensorflow').disabled = True
-
 import tensorflow as tf
-tf.get_logger().setLevel('ERROR')
 from sklearn.model_selection import train_test_split
 
 
@@ -76,8 +69,26 @@ def choose_card_base(behaviour, current_hand, options, state):
             playing = choose_card_base("L", current_hand, new_options, state)
         else:
             playing = choose_card_base("Hi", current_hand, new_options, state)
-    elif behaviour == 'NN':
-        playing, actions_, valid_actions_ = agent.select_action(state, options, current_hand)
+    elif behaviour == 'Q':
+        # Optimal action
+        action_options = []
+        # Make options in form of 'H2' so can be checked agaianst actions
+        for option in options:
+            cur_card = current_hand.cards[option]
+            action_options.append(str(cur_card.suit) + str(cur_card.val))
+
+        # Get all q values
+        index = get_state_index(state)
+        q_values = q_table[index]
+        ordered_actions = [action_space[j] for j in np.argsort(q_values)]
+        # Action index list! order them, 0 best, 51 worst
+
+        for j in range(0, len(ordered_actions)):
+            # Loop cards to find highest valid option
+            if ordered_actions[j] in action_options:
+                position_in_hand = action_options.index(ordered_actions[j])
+                playing = current_hand.remove_card(options[position_in_hand])
+                break
     else:
         playing = None
         print("Behaviour should be Q, R, L, Hi, He1, He2 or He3")
@@ -121,103 +132,113 @@ def count_hearts(table):
             hearts = hearts + 1
     return hearts
 
-def create_q_network(state_dim, action_dim):
-    model = tf.keras.Sequential([
-        tf.keras.layers.Input(shape=(2,)),
-        tf.keras.layers.Dense(64, activation='relu'),
-        tf.keras.layers.Dense(64, activation='relu'),
-        tf.keras.layers.Dense(action_dim)
-    ])
-    return model
 
-# Define the epsilon-greedy policy
-def epsilon_greedy_policy(q_values, epsilon, options, hand):
-    action_options = []
-    for option in options:
-        cur_card = hand.cards[option]
-        action_options.append(str(cur_card.suit) + str(cur_card.val))
-    valid_actions = action_options
-    if random.random() < epsilon:
-        position_in_hand = random.randint(0, len(options) - 1)
-        action_form = str(hand.cards[position_in_hand].suit) + str(
-            hand.cards[position_in_hand].val)
-        playing = hand.remove_card(options[position_in_hand])
-        return playing, action_form, valid_actions
-    else:
-        ordered_actions = [action_space[j] for j in np.argsort(q_values)]
-        # Action index list! order them, 0 best, 51 worst
-        for j in range(0, len(ordered_actions)):
-            # Loop cards to find highest valid option
-            if ordered_actions[j] in action_options:
-                position_in_hand = action_options.index(ordered_actions[j])
-                action_form = str(hand.cards[position_in_hand].suit) + str(
-                    hand.cards[position_in_hand].val)
-                playing = hand.remove_card(options[position_in_hand])
-                return playing, action_form, valid_actions
-class ReplayBuffer:
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.buffer = []
+def train_q():
+    learn_rate = 0.1
+    discount_rate = 0.9
+    explore_element = 0.1
+    training = True
+    training_rounds = 10000
+    current_training_round = 0
+    behaviour = ['Q', 'Q', 'Q', 'Q']
 
-    def push(self, experience):
-        if len(self.buffer) >= self.capacity:
-            self.buffer.pop(0)
-        self.buffer.append(experience)
+    while training:
+        # Heart setup
+        played_cards = []
+        hands, current_player = Hearts.setup(behaviour)
+        won_cards = [[], [], [], []]
+        turn_record = []
+        cur_score = [0, 0, 0, 0]
 
-    def sample(self, batch_size):
-        return random.sample(self.buffer, batch_size)
-class DQNAgent:
-    def __init__(self, state_dim, action_dim, capacity, batch_size, gamma, epsilon_start, epsilon_end, epsilon_decay, target_update):
-        self.q_network = create_q_network(state_dim, action_dim)
-        self.target_network = create_q_network(state_dim, action_dim)
-        self.target_network.set_weights(self.q_network.get_weights())
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
-        self.q_network.compile(optimizer=self.optimizer, loss='mse')
-        self.memory = ReplayBuffer(capacity)
-        self.batch_size = batch_size
-        self.gamma = gamma
-        self.epsilon = epsilon_start
-        self.epsilon_end = epsilon_end
-        self.epsilon_decay = epsilon_decay
-        self.target_update = target_update
+        # Q setup
+        # Statespace: hearts on table, current winning card
+        state = [[], [], [], []]
+        for i in range(0, 4):
+            state[i] = [0, 0]
 
-    def update_target_network(self):
-        self.target_network.set_weights(self.q_network.get_weights())
+        # Round setup
+        for i in range(0, 13):
+            # Hearts setup
+            starter = True
+            current_turn_record = ["", 0, 0, 0, 0, 0]
+            who_played = []
+            on_table = []
+            # Q setup
+            action = [0, 0, 0, 0]
+            # Players actions
+            for e in range(0, 4):
+                # get current state for player
+                state[current_player][0] = count_hearts(on_table)
+                if len(on_table) != 0:
+                    state[current_player][1] = Card_Manip.card_number(Hearts.find_wining_card(on_table))
+                else:
+                    state[current_player][1] = 0
 
-    def update_model(self):
-        if len(self.memory.buffer) < self.batch_size:
-            return
-        batch = self.memory.sample(self.batch_size)
-        # states, actions, rewards, next_states, dones = batch
+                # Find possible to play cards
+                # Options is a list contianing all the positions in the hand which are valid cards to play
+                if starter:
+                    options = list(range(0, len(hands[current_player].cards)))
+                else:
+                    options = Hearts.calc_options(hands[current_player], current_turn_record[0])
 
-        states = np.array([data[0] for data in batch])
-        actions = np.array([data[1] for data in batch])
-        rewards = np.array([data[2] for data in batch])
-        next_states = np.array([data[3] for data in batch])
-        dones = np.array([data[4] for data in batch])
+                # Choose action
+                if np.random.rand() < explore_element:
+                    # Random action
+                    position_in_hand = random.randint(0, len(options) - 1)
+                    action_form = str(hands[current_player].cards[position_in_hand].suit) + str(
+                        hands[current_player].cards[position_in_hand].val)
+                    playing = hands[current_player].remove_card(options[position_in_hand])
+                else:
+                    # Optimal action
+                    action_options = []
+                    # Make options in form of 'H2' so can be checked agaianst actions
+                    for option in options:
+                        cur_card = hands[current_player].cards[option]
+                        action_options.append(str(cur_card.suit) + str(cur_card.val))
 
-        states = np.array(states)
-        next_states = np.array(next_states)
-        q_values = self.q_network.predict(states, verbose=0)
-        next_q_values = self.target_network.predict(next_states, verbose=0)
-        for i in range(self.batch_size):
-            if dones[i]:
-                q_values[i][actions[i]] = rewards[i]
-            else:
-                action_form = Card_Manip.card_number(actions[i])
-                q_values[i][action_form] = rewards[i] + self.gamma * np.max(next_q_values[i])
-        self.q_network.fit(states, q_values, verbose=0)
+                    # Get all q values
+                    index = get_state_index(state[current_player])
+                    q_values = q_table[index]
+                    ordered_actions = [action_space[j] for j in np.argsort(q_values)]
+                    # Action index list! order them, 0 best, 51 worst
 
-    def select_action(self, state, options, hand):
-        state_array = np.array(state)
-        input_shape = (2,)  # Represents two features
-        reshaped_state = np.array(state_array).reshape(input_shape)
-        reshaped_state = np.expand_dims(reshaped_state, axis=0)
-        q_values = self.q_network.predict(reshaped_state, verbose=0)
-        return epsilon_greedy_policy(q_values, self.epsilon, options, hand)
+                    for j in range(0, len(ordered_actions)):
+                        # Loop cards to find highest valid option
+                        if ordered_actions[j] in action_options:
+                            position_in_hand = action_options.index(ordered_actions[j])
+                            action_form = str(hands[current_player].cards[position_in_hand].suit) + str(
+                                hands[current_player].cards[position_in_hand].val)
+                            playing = hands[current_player].remove_card(options[position_in_hand])
+                            break
 
-    def decay_epsilon(self):
-        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
+                # Take action
+                action[current_player] = action_form
+                on_table, who_played, current_turn_record = Hearts.one_loop(current_player, starter, on_table,
+                                                                            who_played,
+                                                                            current_turn_record, playing)
+
+                current_player = Hearts.next(current_player)
+                starter = False
+
+            # Round end
+            won_cards, turn_record, current_player, played_cards = Hearts.round_over(who_played, on_table, won_cards,
+                                                                                     turn_record,
+                                                                                     current_turn_record, played_cards)
+
+            new_score = Hearts.count_points(won_cards)
+            for j in range(0, 4):
+                ## Making next state on_table by blank is, a bit upsetting, but i cant think of a way around it
+                # Check reward of new stats
+                next_state = [0, 0]
+                reward = calc_reward(cur_score, new_score, current_player, j)
+                # Update Q-table
+                update_q_table(state[j], action[j], reward, next_state, learn_rate, discount_rate)
+            cur_score = new_score
+
+        current_training_round = current_training_round + 1
+        if current_training_round >= training_rounds:
+            training = False
+
 
 def train_nn():
     training_data = []
@@ -232,7 +253,6 @@ def train_nn():
         cur_score = [0, 0, 0, 0]
         state = [[], [], [], []]
         valid_in_loop = []
-        episode_reward = [0, 0, 0, 0]
         for i in range(0, 4):
             state[i] = [0, 0]
 
@@ -264,8 +284,31 @@ def train_nn():
                 else:
                     options = Hearts.calc_options(hands[current_player], current_turn_record[0])
 
-                playing, actions[current_player],valid_actions[current_player] = agent.select_action(state[current_player], options, hands[current_player])
+                # Optimal action
+                action_options = []
+                # Make options in form of 'H2' so can be checked agaianst actions
+                for option in options:
+                    cur_card = hands[current_player].cards[option]
+                    action_options.append(str(cur_card.suit) + str(cur_card.val))
 
+                valid_actions[current_player] = action_options
+                # Get all q values
+                index = get_state_index(state[current_player])
+                q_values = q_table[index]
+                ordered_actions = [action_space[j] for j in np.argsort(q_values)]
+
+                # Action index list! order them, 0 best, 51 worst
+                action_form = 1
+                for j in range(0, len(ordered_actions)):
+                    # Loop cards to find highest valid option
+                    if ordered_actions[j] in action_options:
+                        position_in_hand = action_options.index(ordered_actions[j])
+                        action_form = str(hands[current_player].cards[position_in_hand].suit) + str(
+                            hands[current_player].cards[position_in_hand].val)
+                        playing = hands[current_player].remove_card(options[position_in_hand])
+                        break
+
+                actions[current_player] = action_form
                 on_table, who_played, current_turn_record = Hearts.one_loop(current_player, starter, on_table,
                                                                             who_played,
                                                                             current_turn_record, playing)
@@ -282,18 +325,55 @@ def train_nn():
                 # action is number 1 to 52, also currently in 'S2'
                 # valid action is an array of all valid actions in action form (1-52), currently in form 'S2'
                 # reward is not needed rn?
-                next_state = [0, 0]
-                agent.memory.push((state[player], actions[player], rewards[player], next_state, False))
-                episode_reward[player] += rewards[player]
-                agent.update_model()
+                valid_here = []
+                for items in valid_actions[player]:
+                    valid_here.append(Card_Manip.card_number(items))
+                valid_in_loop.append(valid_here)
+                episode_data[player] = ((
+                                    get_state_index(state[player]), Card_Manip.card_number(actions[player]),
+                                    rewards[player]))
+                training_data.extend([episode_data[player]])
+
 
         # Training round over
         current_round = current_round + 1
-        if current_round % 100 == 0:
-            print("Training round:", current_round)
-        if current_round >= training_rounds:
+        if current_round <= training_rounds:
             training = False
-    print("Training Rounds:", current_round)
+
+    states = np.array([data[0] for data in training_data])
+    actions = np.array([data[1] for data in training_data])
+    rewards = np.array([data[2] for data in training_data])
+    valid_actions = valid_in_loop
+
+    # Split into train and test
+    num_samples = states.shape[0]
+    indices = np.random.permutation(num_samples)
+    split_ratio = 0.8
+    split_index = int(split_ratio * num_samples)
+    train_indices = indices[:split_index]
+    test_indices = indices[split_index:]
+    train_states, test_states = states[train_indices], states[test_indices]
+    train_actions, test_actions = actions[train_indices], actions[test_indices]
+    train_valid_actions = [valid_actions[i] for i in train_indices]
+    test_valid_actions = [valid_actions[i] for i in test_indices]
+
+    # Compile the model
+    model.compile(optimizer='adam', loss='categorical_crossentropy')
+
+    # get valid action mask
+    flat_train_valid_actions = [action for sublist in train_valid_actions for action in sublist]
+    valid_actions_one_hot = tf.one_hot(flat_train_valid_actions, num_actions)  # One-hot encode valid actions
+    train_actions_expanded = tf.expand_dims(train_actions, axis=1)
+    train_actions_expanded = tf.cast(train_actions_expanded, dtype=valid_actions_one_hot.dtype)
+    masked_actions = tf.multiply(train_actions_expanded, valid_actions_one_hot)  # Element-wise multiplication with broadcasting
+
+
+    # Train the model using the training data
+    model.fit(train_states, masked_actions, batch_size=32, epochs=10, validation_split=0.2)
+
+    # Evaluate the trained model
+    valid_test_actions = test_actions * tf.one_hot(test_valid_actions, num_actions)
+    test_loss = model.evaluate(test_states, valid_test_actions)
 
 
 def calc_reward(pre_points, cur_points, start_player, player_evaluated):
@@ -385,22 +465,24 @@ for val in ranks:
 state_space, num_states = initialize_state_space()
 num_actions = len(action_space)
 q_table = np.zeros((num_states, num_actions))
+# print(q_table)
 
+training_route = True
 
-#train paramiters
-state_dim = 2
-action_dim = 52
-capacity = 10000
-batch_size = 64
-gamma = 0.99
-epsilon_start = 1.0
-epsilon_end = 0.01
-epsilon_decay = 0.995
-target_update = 10
+print("Train Q start")
+start_time_q = time.time()
+train_q()
+end_time_q = time.time()
+train_time = end_time_q - start_time_q
+print("Q trained in", train_time, "seconds")
 
-agent = DQNAgent(state_dim, action_dim, capacity, batch_size, gamma, epsilon_start, epsilon_end, epsilon_decay, target_update)
-
-
+input_shape = num_states
+output_shape = num_actions
+model = tf.keras.Sequential([
+    tf.keras.layers.Dense(64, activation='relu', input_shape=(input_shape,)),
+    tf.keras.layers.Dense(64, activation='relu'),
+    tf.keras.layers.Dense(output_shape)
+])
 print("Train NN start")
 start_time_nn = time.time()
 train_nn()
@@ -408,11 +490,8 @@ end_time_nn = time.time()
 train_time = end_time_nn - start_time_nn
 print("NN trained in", train_time, "seconds")
 
-
-
-
 for game in range(0, 1000):
-    b_ops = ["R", "L", "Hi", "He1", "He2", "He3", "NN"]
+    b_ops = ["R", "L", "Hi", "He1", "He2", "He3", "Q"]
     behaviour_pre = []
     behaviour_num = []
 
@@ -429,9 +508,6 @@ for game in range(0, 1000):
         scoring[behaviour_num[i]][positions[i] - 1] = scoring[behaviour_num[i]][positions[i] - 1] + 1
         # increase how many games its in
         games_played[behaviour_num[i]] = games_played[behaviour_num[i]] + 1
-
-    if game % 100 == 0:
-        print("game:", game)
 
 # Outpts
 # Scores n jazz
@@ -465,5 +541,3 @@ ax.grid(axis='y')
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 plt.show()
-
-tf.get_logger().setLevel('INFO')
