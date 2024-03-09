@@ -5,22 +5,8 @@ import numpy as np
 import itertools
 import matplotlib.pyplot as plt
 import time
-
-# import os
-# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-# import logging
-# logging.getLogger('tensorflow').disabled = True
-
 import tensorflow as tf
-tf.get_logger().setLevel('ERROR')
 from sklearn.model_selection import train_test_split
-
-
-# import keras
-# import tensorflow
-# from keras.models import Sequential
-# from keras.layers import Dense
-
 
 def win_order(points):
     # returns an array with the placment od 1st 2nd and so on in the index of the behaviour that got that place
@@ -124,8 +110,10 @@ def count_hearts(table):
 def create_q_network(state_dim, action_dim):
     model = tf.keras.Sequential([
         tf.keras.layers.Input(shape=(2,)),
-        tf.keras.layers.Dense(64, activation='relu'),
-        tf.keras.layers.Dense(64, activation='relu'),
+        tf.keras.layers.Dense(32, activation='relu'),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(32, activation='relu'),
+        tf.keras.layers.Dropout(0.2),
         tf.keras.layers.Dense(action_dim)
     ])
     return model
@@ -206,7 +194,7 @@ class DQNAgent:
             else:
                 action_form = Card_Manip.card_number(actions[i])
                 q_values[i][action_form] = rewards[i] + self.gamma * np.max(next_q_values[i])
-        self.q_network.fit(states, q_values, verbose=0)
+        self.q_network.fit(states, q_values, verbose=0, use_multiprocessing = True)
 
     def select_action(self, state, options, hand):
         state_array = np.array(state)
@@ -222,7 +210,7 @@ class DQNAgent:
 def train_nn():
     training_data = []
     training = True
-    training_rounds = 1000
+    training_rounds = 200
     current_round = 0
     while training:
         played_cards = []
@@ -289,7 +277,7 @@ def train_nn():
 
         # Training round over
         current_round = current_round + 1
-        if current_round % 100 == 0:
+        if current_round % 10 == 0:
             print("Training round:", current_round)
         if current_round >= training_rounds:
             training = False
@@ -400,16 +388,12 @@ target_update = 10
 
 agent = DQNAgent(state_dim, action_dim, capacity, batch_size, gamma, epsilon_start, epsilon_end, epsilon_decay, target_update)
 
-
 print("Train NN start")
 start_time_nn = time.time()
 train_nn()
 end_time_nn = time.time()
 train_time = end_time_nn - start_time_nn
 print("NN trained in", train_time, "seconds")
-
-
-
 
 for game in range(0, 1000):
     b_ops = ["R", "L", "Hi", "He1", "He2", "He3", "NN"]
@@ -467,3 +451,46 @@ ax.spines['right'].set_visible(False)
 plt.show()
 
 tf.get_logger().setLevel('INFO')
+
+
+# Scores
+# 200 training  rounds, 1000 test:
+# --
+#     model = tf.keras.Sequential([
+#         tf.keras.layers.Input(shape=(2,)),
+#         tf.keras.layers.Dense(64, activation='relu'),
+#         tf.keras.layers.Dense(64, activation='relu'),
+#         tf.keras.layers.Dense(action_dim)
+#     ])
+# Time taken: 1042.5467159748077 seconds
+# Performance: 2.482882882882883 (0.3 off best)
+# Action speed: ?
+# --
+#     model = tf.keras.Sequential([
+#         tf.keras.layers.Input(shape=(2,)),
+#         tf.keras.layers.Dense(64, activation='relu'),
+#         tf.keras.layers.Dropout(0.2),
+#         tf.keras.layers.Dense(64, activation='relu'),
+#         tf.keras.layers.Dropout(0.2),
+#         tf.keras.layers.Dense(action_dim)
+#     ])
+# Time taken: 1028.2004833221436 seconds
+# Performance: 2.557142857142857 (0.1 off best)
+# Action speed: ?
+# --
+#     model = tf.keras.Sequential([
+#         tf.keras.layers.Input(shape=(2,)),
+#         tf.keras.layers.Dense(32, activation='relu'),
+#         tf.keras.layers.Dropout(0.2),
+#         tf.keras.layers.Dense(32, activation='relu'),
+#         tf.keras.layers.Dropout(0.2),
+#         tf.keras.layers.Dense(action_dim)
+#     ])
+# Time taken: 1038.942824602127 seconds
+# Performance: 2.625 (The Best!)
+# Action speed: ?
+
+# Test Regular Q with 200 games... still better
+
+
+# could optimise action making speed by once finished training it will predice table for all states. Would increase training a fair bit tho
