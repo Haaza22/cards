@@ -1,5 +1,5 @@
 import random
-import Card_Manip
+import Card_Manip as CM
 import Hearts
 import numpy as np
 import itertools
@@ -7,6 +7,21 @@ import matplotlib.pyplot as plt
 import time
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
+
+
+def run_time_calc():
+    deckt = CM.Deck()
+    handt1 = CM.Hand()
+    handt2 = CM.Hand()
+    handt3 = CM.Hand()
+    handt4 = CM.Hand()
+    CM.deal_deck(deckt, handt1, handt2, handt3, handt4, 13)
+    start_time = time.time()
+    choose_card_base("NN", handt1, [0, 1, 2, 3, 4, 5, 6], [2, 7])
+    end_time = time.time()
+    run_time = end_time - start_time
+    return run_time
+
 
 def win_order(points):
     # returns an array with the placment od 1st 2nd and so on in the index of the behaviour that got that place
@@ -107,6 +122,7 @@ def count_hearts(table):
             hearts = hearts + 1
     return hearts
 
+
 def create_q_network(state_dim, action_dim):
     model = tf.keras.Sequential([
         tf.keras.layers.Input(shape=(2,)),
@@ -117,6 +133,7 @@ def create_q_network(state_dim, action_dim):
         tf.keras.layers.Dense(action_dim)
     ])
     return model
+
 
 # Define the epsilon-greedy policy
 def epsilon_greedy_policy(q_values, epsilon, options, hand):
@@ -142,6 +159,8 @@ def epsilon_greedy_policy(q_values, epsilon, options, hand):
                     hand.cards[position_in_hand].val)
                 playing = hand.remove_card(options[position_in_hand])
                 return playing, action_form, valid_actions
+
+
 class ReplayBuffer:
     def __init__(self, capacity):
         self.capacity = capacity
@@ -154,8 +173,11 @@ class ReplayBuffer:
 
     def sample(self, batch_size):
         return random.sample(self.buffer, batch_size)
+
+
 class DQNAgent:
-    def __init__(self, state_dim, action_dim, capacity, batch_size, gamma, epsilon_start, epsilon_end, epsilon_decay, target_update):
+    def __init__(self, state_dim, action_dim, capacity, batch_size, gamma, epsilon_start, epsilon_end, epsilon_decay,
+                 target_update):
         self.q_network = create_q_network(state_dim, action_dim)
         self.target_network = create_q_network(state_dim, action_dim)
         self.target_network.set_weights(self.q_network.get_weights())
@@ -192,9 +214,9 @@ class DQNAgent:
             if dones[i]:
                 q_values[i][actions[i]] = rewards[i]
             else:
-                action_form = Card_Manip.card_number(actions[i])
+                action_form = CM.card_number(actions[i])
                 q_values[i][action_form] = rewards[i] + self.gamma * np.max(next_q_values[i])
-        self.q_network.fit(states, q_values, verbose=0, use_multiprocessing = True)
+        self.q_network.fit(states, q_values, verbose=0, use_multiprocessing=True)
 
     def select_action(self, state, options, hand):
         state_array = np.array(state)
@@ -206,6 +228,7 @@ class DQNAgent:
 
     def decay_epsilon(self):
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
+
 
 def train_nn():
     training_data = []
@@ -241,7 +264,7 @@ def train_nn():
                 # get current state for player
                 state[current_player][0] = count_hearts(on_table)
                 if len(on_table) != 0:
-                    state[current_player][1] = Card_Manip.card_number(Hearts.find_wining_card(on_table))
+                    state[current_player][1] = CM.card_number(Hearts.find_wining_card(on_table))
                 else:
                     state[current_player][1] = 0
 
@@ -252,7 +275,8 @@ def train_nn():
                 else:
                     options = Hearts.calc_options(hands[current_player], current_turn_record[0])
 
-                playing, actions[current_player],valid_actions[current_player] = agent.select_action(state[current_player], options, hands[current_player])
+                playing, actions[current_player], valid_actions[current_player] = agent.select_action(
+                    state[current_player], options, hands[current_player])
 
                 on_table, who_played, current_turn_record = Hearts.one_loop(current_player, starter, on_table,
                                                                             who_played,
@@ -317,7 +341,7 @@ def make_game(behaviour):
             # get current state for player
             state[current_player][0] = count_hearts(on_table)
             if len(on_table) != 0:
-                state[current_player][1] = Card_Manip.card_number(Hearts.find_wining_card(on_table))
+                state[current_player][1] = CM.card_number(Hearts.find_wining_card(on_table))
             else:
                 state[current_player][1] = 0
             # Options is a list contianing all the positions in the hand which are valid cards to play
@@ -374,8 +398,7 @@ state_space, num_states = initialize_state_space()
 num_actions = len(action_space)
 q_table = np.zeros((num_states, num_actions))
 
-
-#train paramiters
+# train paramiters
 state_dim = 2
 action_dim = 52
 capacity = 10000
@@ -386,7 +409,8 @@ epsilon_end = 0.01
 epsilon_decay = 0.995
 target_update = 10
 
-agent = DQNAgent(state_dim, action_dim, capacity, batch_size, gamma, epsilon_start, epsilon_end, epsilon_decay, target_update)
+agent = DQNAgent(state_dim, action_dim, capacity, batch_size, gamma, epsilon_start, epsilon_end, epsilon_decay,
+                 target_update)
 
 print("Train NN start")
 start_time_nn = time.time()
@@ -421,6 +445,11 @@ for game in range(0, 1000):
 # Scores n jazz
 print(scoring)
 print(scoring_analysis(scoring, games_played))
+win_anal = scoring[6][0] + scoring[6][1] / 2
+percent_win = (win_anal / games_played[6]) * 100
+run_time = run_time_calc()
+print("Fitness function:", CM.fitness(percent_win, train_time, run_time)) # Fitness 24.46660559177399
+
 # Plotting graph
 placements = ["1", "2", "3", "4"]
 scores = {
@@ -451,7 +480,6 @@ ax.spines['right'].set_visible(False)
 plt.show()
 
 tf.get_logger().setLevel('INFO')
-
 
 # Scores
 # 200 training  rounds, 1000 test:

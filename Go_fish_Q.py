@@ -5,8 +5,26 @@ import matplotlib.pyplot as plt
 import itertools
 import time
 
+
 def get_state_index(state):
-    return int(state[0])*15*15 + int(state[1]) * 15 + int(state[2])
+    return int(state[0]) * 15 * 15 + int(state[1]) * 15 + int(state[2])
+
+
+def run_time_calc():
+    deckt = CM.Deck()
+    handt1 = CM.Hand()
+    handt2 = CM.Hand()
+    handt3 = CM.Hand()
+    handt4 = CM.Hand()
+    handst = [handt1, handt2, handt3, handt4]
+    CM.deal_deck(deckt, handt1, handt2, handt3, handt4, 5)
+    start_time = time.time()
+    # def choose_action(behaviour, options, opponents, current_hand, hands, state, turn):
+    choose_action("QQ", find_values(handt1.cards), [0, 1, 2], handt1, handst, [0, 4, 7], 0)
+    end_time = time.time()
+    run_time = end_time - start_time
+    return run_time
+
 
 def train_q():
     learn_rate = 0.1
@@ -79,7 +97,7 @@ def train_q():
                             action_temp = opponent
                             if int(turn) < int(opponent):
                                 action_temp = int(action_temp) - 1
-                            action_options.append(str(action_temp)+str(val))
+                            action_options.append(str(action_temp) + str(val))
 
                     # Get all q values
                     index = get_state_index(states[turn])
@@ -98,7 +116,7 @@ def train_q():
 
                 action_target = target
                 if int(turn) < int(target):
-                    action_target = int(target)-1
+                    action_target = int(target) - 1
 
                 action = str(action_target) + str(guess_val)
 
@@ -153,14 +171,14 @@ def train_q():
 
             hands[turn] = current_hand
 
-            #Update Q
+            # Update Q
             next_state = states[turn]
             reward = calc_reward(start_books, books[turn], extra_turn)
             # Update Q-table
             update_q_table(states[turn], action, reward, next_state, learn_rate, discount_rate)
 
             # update_states
-            update_pos=0
+            update_pos = 0
             for i in range(0, 4):
                 if i != turn:
                     # Update the right one. so if 0 guess, then 1 0, 2 0 and 3 0 would need it
@@ -168,7 +186,7 @@ def train_q():
                     # If 2 guessed then 0 2, 1 2 and 3 3
                     # If 3 guessed then 0 3, 1 3 and 2 3
                     states[i][update_pos] = guess_val
-                    update_pos = update_pos+1
+                    update_pos = update_pos + 1
 
             if alive > 1 or pond_exists:
                 if not extra_turn:
@@ -191,6 +209,7 @@ def calc_reward(start_points, end_points, extra_turn):
         points = points + 1
     return points
 
+
 def update_q_table(state, action, reward, next_state, learn_rate, discount_rate):
     state_index = get_state_index(state)
     next_state_index = get_state_index(next_state)
@@ -205,7 +224,7 @@ def update_q_table(state, action, reward, next_state, learn_rate, discount_rate)
 
 def initialize_state_space():
     # State is 3 most recent asked for. order it to lower size
-    permutations = list(itertools.product(range(0,15), repeat=3))
+    permutations = list(itertools.product(range(0, 15), repeat=3))
     # Print the state space
     return len(permutations)
 
@@ -336,7 +355,8 @@ def main_game(behaviour):
             opponents = valid_opponents(in_game, turn)
 
             # Make guess
-            guess_val, target = choose_action(behaviour[turn], options, opponents, current_hand, hands, states[turn], turn)
+            guess_val, target = choose_action(behaviour[turn], options, opponents, current_hand, hands, states[turn],
+                                              turn)
 
             # Setup
             target_hand = hands[int(target)]
@@ -411,7 +431,6 @@ def choose_action(behaviour, options, opponents, current_hand, hands, state, tur
         action_options = []
         # Make options in form of '22' so can be checked agaianst action space
 
-
         # PROBLEM IS OPPONENT CHOSEN ISNT ALEAYS CORREST
         # IT CHOOSES OPPOENENT 3 WHEN IT SHOULDNT
         for opponent in opponents:
@@ -437,7 +456,7 @@ def choose_action(behaviour, options, opponents, current_hand, hands, state, tur
                 break
     else:
         # Card Choice
-        if behaviour[0] == 'R' or random.randint(1,4) == 1 or behaviour[0] == 'Q':
+        if behaviour[0] == 'R' or random.randint(1, 4) == 1 or behaviour[0] == 'Q':
             guessing_val = options[random.randint(0, len(options) - 1)]
         elif behaviour[0] == 'M':
             # Find the value with the most occurrences in the hand
@@ -451,14 +470,15 @@ def choose_action(behaviour, options, opponents, current_hand, hands, state, tur
         else:
             print("Behavour pt 0 doesnt exist")
         # Opponent Choice
-        if behaviour[1] == 'R' or random.randint(1,4) == 1 or behaviour[1] == 'Q':
+        if behaviour[1] == 'R' or random.randint(1, 4) == 1 or behaviour[1] == 'Q':
             target_guessing = opponents[random.randint(0, len(opponents) - 1)]
         elif behaviour[1] == 'M':
             target_guessing = max(opponents, key=lambda x: hands[x].size)
         elif behaviour[1] == 'L':
             # Filter opponents with non-empty hands
             non_empty_opponents = [o for o in opponents if hands[o].size > 0]
-            target_guessing = min(non_empty_opponents, key=lambda x: hands[x].size) if non_empty_opponents else random.choice(
+            target_guessing = min(non_empty_opponents,
+                                  key=lambda x: hands[x].size) if non_empty_opponents else random.choice(
                 opponents)
         else:
             print("Behavour pt 1 doesnt exist")
@@ -477,6 +497,7 @@ def score_analysis(books):
         positions.append(5 - more)
 
     return positions
+
 
 def scoring_analysis(scores, games_played):
     totals = np.zeros(10)
@@ -530,13 +551,17 @@ for games in range(0, 1000):
         # increase how many games its in
         games_played[behaviour_num[i]] = games_played[behaviour_num[i]] + 1
 
-
 print(scoring)
 print(scoring_analysis(scoring, games_played))
+print(scoring_analysis(scoring, games_played))
+win_anal = scoring[9][0] + scoring[9][1] / 2
+percent_win = (win_anal / games_played[9]) * 100
+run_time = run_time_calc()
+print("Fitness function:", CM.fitness(percent_win, train_time, run_time)) # Fitness 60.32376059613577
 
 # Plotting graph
-placements=["1","2","3","4"]
-scores={
+placements = ["1", "2", "3", "4"]
+scores = {
     'Random Random': scoring[0],
     'Random Most': scoring[1],
     'Random Least': scoring[2],

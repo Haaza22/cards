@@ -1,5 +1,5 @@
 import random
-import Card_Manip
+import Card_Manip as CM
 import Hearts
 import numpy as np
 import itertools
@@ -11,6 +11,18 @@ import time
 # import tensorflow
 # from keras.models import Sequential
 # from keras.layers import Dense
+def run_time_calc():
+    deckt = CM.Deck()
+    handt1 = CM.Hand()
+    handt2 = CM.Hand()
+    handt3 = CM.Hand()
+    handt4 = CM.Hand()
+    CM.deal_deck(deckt, handt1, handt2, handt3, handt4, 13)
+    start_time = time.time()
+    choose_card_base("Q", handt1, [0, 1, 2, 3, 4, 5, 6], [2, 7])
+    end_time = time.time()
+    run_time = end_time - start_time
+    return run_time
 
 
 def win_order(points):
@@ -146,7 +158,7 @@ def train_q():
         hands, current_player = Hearts.setup(behaviour)
         won_cards = [[], [], [], []]
         turn_record = []
-        cur_score = [0,0,0,0]
+        cur_score = [0, 0, 0, 0]
 
         # Q setup
         # Statespace: hearts on table, current winning card
@@ -168,7 +180,7 @@ def train_q():
                 # get current state for player
                 state[current_player][0] = count_hearts(on_table)
                 if len(on_table) != 0:
-                    state[current_player][1] = Card_Manip.card_number(Hearts.find_wining_card(on_table))
+                    state[current_player][1] = CM.card_number(Hearts.find_wining_card(on_table))
                 else:
                     state[current_player][1] = 0
 
@@ -182,8 +194,9 @@ def train_q():
                 # Choose action
                 if np.random.rand() < explore_element:
                     # Random action
-                    position_in_hand = random.randint(0, len(options)-1)
-                    action_form = str(hands[current_player].cards[position_in_hand].suit) + str(hands[current_player].cards[position_in_hand].val)
+                    position_in_hand = random.randint(0, len(options) - 1)
+                    action_form = str(hands[current_player].cards[position_in_hand].suit) + str(
+                        hands[current_player].cards[position_in_hand].val)
                     playing = hands[current_player].remove_card(options[position_in_hand])
                 else:
                     # Optimal action
@@ -203,7 +216,8 @@ def train_q():
                         # Loop cards to find highest valid option
                         if ordered_actions[j] in action_options:
                             position_in_hand = action_options.index(ordered_actions[j])
-                            action_form = str(hands[current_player].cards[position_in_hand].suit) + str(hands[current_player].cards[position_in_hand].val)
+                            action_form = str(hands[current_player].cards[position_in_hand].suit) + str(
+                                hands[current_player].cards[position_in_hand].val)
                             playing = hands[current_player].remove_card(options[position_in_hand])
                             break
 
@@ -230,7 +244,6 @@ def train_q():
                 # Update Q-table
                 update_q_table(state[j], action[j], reward, next_state, learn_rate, discount_rate)
             cur_score = new_score
-
 
         current_training_round = current_training_round + 1
         if current_training_round >= training_rounds:
@@ -259,7 +272,7 @@ def make_game(behaviour):
     played_cards = []
     current_scores = [0, 0, 0, 0]
 
-    state = [[0,0], [0,0], [0,0], [0,0]]
+    state = [[0, 0], [0, 0], [0, 0], [0, 0]]
     for i in range(0, 13):
         starter = True
         current_turn_record = ["", 0, 0, 0, 0, 0]
@@ -270,7 +283,7 @@ def make_game(behaviour):
             # get current state for player
             state[current_player][0] = count_hearts(on_table)
             if len(on_table) != 0:
-                state[current_player][1] = Card_Manip.card_number(Hearts.find_wining_card(on_table))
+                state[current_player][1] = CM.card_number(Hearts.find_wining_card(on_table))
             else:
                 state[current_player][1] = 0
             # Options is a list contianing all the positions in the hand which are valid cards to play
@@ -297,7 +310,7 @@ def make_game(behaviour):
     return points, positions
 
 
-def scoring_analysis(scores,games_played):
+def scoring_analysis(scores, games_played):
     # Takes the scores and gives a total fitnees score relating to the other games
     # 5 poitns for first, 3 for 2nd 1 for 3rd and none for last
     totals = [0, 0, 0, 0, 0, 0, 0]
@@ -308,7 +321,7 @@ def scoring_analysis(scores,games_played):
 
 # Initialise score tracking
 scoring = np.zeros((7, 4))
-games_played=[0,0,0,0,0,0,0]
+games_played = [0, 0, 0, 0, 0, 0, 0]
 
 action_space = []
 # initialise Q learning
@@ -358,14 +371,18 @@ for game in range(0, 1000):
     for i in range(0, 4):
         scoring[behaviour_num[i]][positions[i] - 1] = scoring[behaviour_num[i]][positions[i] - 1] + 1
         # increase how many games its in
-        games_played[behaviour_num[i]] = games_played[behaviour_num[i]]+1
+        games_played[behaviour_num[i]] = games_played[behaviour_num[i]] + 1
 
 print(scoring)
 print(scoring_analysis(scoring, games_played))
+win_anal = scoring[6][0] + scoring[6][1] / 2
+percent_win = (win_anal / games_played[6]) * 100
+run_time = run_time_calc()
+print("Fitness function:", CM.fitness(percent_win, train_time, run_time))  # fittness is: 47.548330248657024
 
 # Plotting graph
-placements = ["1","2","3","4"]
-scores={
+placements = ["1", "2", "3", "4"]
+scores = {
     'Random': scoring[0],
     'Lowest': scoring[1],
     'Highest': scoring[2],

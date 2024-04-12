@@ -6,8 +6,23 @@ import itertools
 import time
 import tensorflow as tf
 
+
 def get_state_index(state):
-    return int(state[0])*15*15 + int(state[1]) * 15 + int(state[2])
+    return int(state[0]) * 15 * 15 + int(state[1]) * 15 + int(state[2])
+def run_time_calc():
+    deckt = CM.Deck()
+    handt1 = CM.Hand()
+    handt2 = CM.Hand()
+    handt3 = CM.Hand()
+    handt4 = CM.Hand()
+    handst = [handt1, handt2, handt3, handt4]
+    CM.deal_deck(deckt, handt1, handt2, handt3, handt4, 5)
+    start_time = time.time()
+    # def choose_action(behaviour, options, opponents, current_hand, hands, state, turn):
+    choose_action("NN", find_values(handt1.cards), [0, 1, 2], handt1, handst, [0, 4, 7], 0)
+    end_time = time.time()
+    run_time = end_time - start_time
+    return run_time
 
 def create_q_network(state_dim, action_dim):
     model = tf.keras.Sequential([
@@ -18,36 +33,13 @@ def create_q_network(state_dim, action_dim):
     ])
     return model
 
-def epsilon_greedy_policy(q_values, epsilon, options, hand):
-    action_options = []
-    for option in options:
-        cur_card = hand.cards[option]
-        action_options.append(str(cur_card.suit) + str(cur_card.val))
-    valid_actions = action_options
-    if random.random() < epsilon:
-        position_in_hand = random.randint(0, len(options) - 1)
-        action_form = str(hand.cards[position_in_hand].suit) + str(
-            hand.cards[position_in_hand].val)
-        playing = hand.remove_card(options[position_in_hand])
-        return playing, action_form, valid_actions
-    else:
-        ordered_actions = [action_space[j] for j in np.argsort(q_values)]
-        # Action index list! order them, 0 best, 51 worst
-        for j in range(0, len(ordered_actions)):
-            # Loop cards to find highest valid option
-            if ordered_actions[j] in action_options:
-                position_in_hand = action_options.index(ordered_actions[j])
-                action_form = str(hand.cards[position_in_hand].suit) + str(
-                    hand.cards[position_in_hand].val)
-                playing = hand.remove_card(options[position_in_hand])
-                return playing, action_form, valid_actions
 
 # Define the epsilon-greedy policy
-def epsilon_greedy_policy(q_values, epsilon, options, hand, hands, states, turn):
+def epsilon_greedy_policy(q_values, epsilon, options, hand, hands, state, turn, opponents):
     # Make guess
     if random.random() < epsilon:
         # Make random move
-        return choose_action("RR", options, opponents, hand, hands, states[turn], turn)
+        return choose_action("RR", options, opponents, hand, hands, state, turn)
     else:
         # Optimal action
         action_options = []
@@ -57,9 +49,8 @@ def epsilon_greedy_policy(q_values, epsilon, options, hand, hands, states, turn)
                 action_temp = opponent
                 if int(turn) < int(opponent):
                     action_temp = int(action_temp) - 1
-                action_options.append(str(action_temp)+str(val))
+                action_options.append(str(action_temp) + str(val))
 
-        q_values = q_values
         ordered_actions = [action_space[j] for j in np.argsort(q_values)]
 
         for j in range(0, len(ordered_actions)):
@@ -70,7 +61,8 @@ def epsilon_greedy_policy(q_values, epsilon, options, hand, hands, states, turn)
                     guess_val = ordered_actions[j][1]
                 else:
                     guess_val = ordered_actions[j][1:]
-                return (guess_val-2), target
+                return guess_val, target
+
 
 class ReplayBuffer:
     def __init__(self, capacity):
@@ -84,8 +76,11 @@ class ReplayBuffer:
 
     def sample(self, batch_size):
         return random.sample(self.buffer, batch_size)
+
+
 class DQNAgent:
-    def __init__(self, state_dim, action_dim, capacity, batch_size, gamma, epsilon_start, epsilon_end, epsilon_decay, target_update):
+    def __init__(self, state_dim, action_dim, capacity, batch_size, gamma, epsilon_start, epsilon_end, epsilon_decay,
+                 target_update):
         self.q_network = create_q_network(state_dim, action_dim)
         self.target_network = create_q_network(state_dim, action_dim)
         self.target_network.set_weights(self.q_network.get_weights())
@@ -123,27 +118,28 @@ class DQNAgent:
                 q_values[i][actions[i]] = rewards[i]
             else:
                 q_values[i][actions[i]] = rewards[i] + self.gamma * np.max(next_q_values[i])
-        self.q_network.fit(states, q_values, verbose=0, use_multiprocessing = True)
+        self.q_network.fit(states, q_values, verbose=0, use_multiprocessing=True)
 
-    def select_action(self, state, options, hand, hands, states, turn):
+    def select_action(self, state, options, hand, hands, turn, opponents):
         state_array = np.array(state)
         input_shape = (3,)  # Represents two features
         reshaped_state = np.array(state_array).reshape(input_shape)
         reshaped_state = np.expand_dims(reshaped_state, axis=0)
         q_values = self.q_network.predict(reshaped_state, verbose=0)
-        return epsilon_greedy_policy(q_values, self.epsilon, options, hand, hands, states, turn)
+        return epsilon_greedy_policy(q_values, self.epsilon, options, hand, hands, state, turn, opponents)
 
     def decay_epsilon(self):
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
+
 
 def train_nn():
     learn_rate = 0.1
     discount_rate = 0.9
     explore_element = 0.1
     training = True
-    training_rounds = 100
+    training_rounds = 200
     current_training_round = 0
-    behaviour = ['QQ', 'QQ', 'QQ', 'QQ']
+    behaviour = ['NN', 'NN', 'NN', 'NN']
     states = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]
 
     while training:
@@ -156,7 +152,7 @@ def train_nn():
         books = [0, 0, 0, 0]
         what_booked = []
         pond_exists = True
-        episode_reward=[0,0,0,0]
+        episode_reward = [0, 0, 0, 0]
 
         # Each item a 5 item array [whos turn it is, target, card asked, successful, if draw from deck is successdul?]
         turn_record = []
@@ -195,13 +191,11 @@ def train_nn():
                 options = find_values(current_hand.cards)
                 opponents = valid_opponents(in_game, turn)
 
-                guess_val, target = agent.select_action(states[turn], options, current_hand, hands, states, turn)
+                guess_val, target = agent.select_action(states[turn], options, current_hand, hands, turn, opponents)
 
                 action_target = target
                 if int(turn) < int(target):
-                    action_target = int(target)-1
-
-
+                    action_target = int(target) - 1
 
                 action = str(action_target) + str(guess_val)
                 action_num = int(action_target) * 13 + int(guess_val)
@@ -211,7 +205,7 @@ def train_nn():
                 current_turn_record[2] = guess_val
 
                 # Do guess
-                target_hand, current_hand, correct = guess(target_hand, current_hand, guess_val)
+                target_hand, current_hand, correct = guess(target_hand, current_hand, (guess_val + 2))
 
                 if correct:
                     extra_turn = True
@@ -256,7 +250,7 @@ def train_nn():
 
             hands[turn] = current_hand
 
-            #Update Q
+            # Update Q
             next_state = states[turn]
             reward = calc_reward(start_books, books[turn], extra_turn)
             # Update Q-table
@@ -265,7 +259,7 @@ def train_nn():
             agent.update_model()
 
             # update_states
-            update_pos=0
+            update_pos = 0
             for i in range(0, 4):
                 if i != turn:
                     # Update the right one. so if 0 guess, then 1 0, 2 0 and 3 0 would need it
@@ -273,7 +267,7 @@ def train_nn():
                     # If 2 guessed then 0 2, 1 2 and 3 3
                     # If 3 guessed then 0 3, 1 3 and 2 3
                     states[i][update_pos] = guess_val
-                    update_pos = update_pos+1
+                    update_pos = update_pos + 1
 
             if alive > 1 or pond_exists:
                 if not extra_turn:
@@ -287,7 +281,6 @@ def train_nn():
             print("Round", current_training_round)
         if current_training_round >= training_rounds:
             training = False
-        print("Rounbd")
 
 
 def calc_reward(start_points, end_points, extra_turn):
@@ -299,9 +292,10 @@ def calc_reward(start_points, end_points, extra_turn):
         points = points + 1
     return points
 
+
 def initialize_state_space():
     # State is 3 most recent asked for. order it to lower size
-    permutations = list(itertools.product(range(0,15), repeat=3))
+    permutations = list(itertools.product(range(0, 15), repeat=3))
     # Print the state space
     return len(permutations)
 
@@ -429,18 +423,25 @@ def main_game(behaviour):
             # getting cards can ask for and opponents can ask
             # Options is between 2 and 14, a number
             options = find_values(current_hand.cards)
-            opponents = valid_opponents(in_game, turn)
+            opponents_main = valid_opponents(in_game, turn)
 
             # Make guess
-            guess_val, target = choose_action(behaviour[turn], options, opponents, current_hand, hands, states[turn], turn)
+            guess_val, target = choose_action(behaviour[turn], options, opponents_main, current_hand, hands,
+                                              states[turn], turn)
 
             # Setup
             target_hand = hands[int(target)]
             current_turn_record[1] = target
             current_turn_record[2] = guess_val
 
+            if target not in opponents_main:
+                print(behaviour[turn])
+                print("Tar", target)
+                print("Opp", opponents_main)
+                print()
+
             # Do guess
-            target_hand, current_hand, correct = guess(target_hand, current_hand, guess_val)
+            target_hand, current_hand, correct = guess(target_hand, current_hand, (guess_val + 2))
 
             if correct:
                 extra_turn = True
@@ -464,7 +465,6 @@ def main_game(behaviour):
             for player in in_game:
                 if player:
                     alive = alive + 1
-
 
         elif alive == 1 and pond_exists:
             # if no one else is a live but the pond eixsts
@@ -501,13 +501,12 @@ def count_vals_in_hand(hand):
     return base
 
 
-def choose_action(behaviour, options, opponents, current_hand, hands, state, turn):
-    if behaviour == "QQ" and np.random.rand() < 0.05:
-        # Optimal action
-        pass
+def choose_action(behaviour, options, opponents_action_choice, current_hand, hands, state, turn):
+    if behaviour == "NN" and np.random.rand() < 0.05:
+        guessing_val, target_guessing = agent.select_action(state, options, current_hand, hands, turn, opponents_action_choice)
     else:
         # Card Choice
-        if behaviour[0] == 'R' or random.randint(1,4) == 1 or behaviour[0] == 'Q':
+        if behaviour[0] == 'R' or random.randint(1, 4) == 1 or behaviour[0] == 'N':
             guessing_val = options[random.randint(0, len(options) - 1)]
         elif behaviour[0] == 'M':
             # Find the value with the most occurrences in the hand
@@ -521,18 +520,19 @@ def choose_action(behaviour, options, opponents, current_hand, hands, state, tur
         else:
             print("Behavour pt 0 doesnt exist")
         # Opponent Choice
-        if behaviour[1] == 'R' or random.randint(1,4) == 1 or behaviour[1] == 'Q':
-            target_guessing = opponents[random.randint(0, len(opponents) - 1)]
+        if behaviour[1] == 'R' or random.randint(1, 4) == 1 or behaviour[1] == 'N':
+            target_guessing = opponents_action_choice[random.randint(0, len(opponents_action_choice) - 1)]
         elif behaviour[1] == 'M':
-            target_guessing = max(opponents, key=lambda x: hands[x].size)
+            target_guessing = max(opponents_action_choice, key=lambda x: hands[x].size)
         elif behaviour[1] == 'L':
             # Filter opponents with non-empty hands
-            non_empty_opponents = [o for o in opponents if hands[o].size > 0]
-            target_guessing = min(non_empty_opponents, key=lambda x: hands[x].size) if non_empty_opponents else random.choice(
-                opponents)
+            non_empty_opponents = [o for o in opponents_action_choice if hands[o].size > 0]
+            target_guessing = min(non_empty_opponents,
+                                  key=lambda x: hands[x].size) if non_empty_opponents else random.choice(
+                opponents_action_choice)
         else:
             print("Behavour pt 1 doesnt exist")
-    return (guessing_val-2), target_guessing
+    return (guessing_val - 2), target_guessing
 
 
 def score_analysis(books):
@@ -547,6 +547,7 @@ def score_analysis(books):
         positions.append(5 - more)
 
     return positions
+
 
 def scoring_analysis(scores, games_played):
     totals = np.zeros(10)
@@ -572,7 +573,7 @@ num_states = initialize_state_space()
 num_actions = len(action_space)
 q_table = np.zeros((num_states, num_actions))
 
-#train paramiters
+# train paramiters
 state_dim = 3
 action_dim = num_actions
 capacity = 10000
@@ -583,7 +584,8 @@ epsilon_end = 0.01
 epsilon_decay = 0.995
 target_update = 10
 
-agent = DQNAgent(state_dim, action_dim, capacity, batch_size, gamma, epsilon_start, epsilon_end, epsilon_decay, target_update)
+agent = DQNAgent(state_dim, action_dim, capacity, batch_size, gamma, epsilon_start, epsilon_end, epsilon_decay,
+                 target_update)
 
 print("Start training")
 start_time = time.time()
@@ -595,7 +597,7 @@ print("Trained done in", train_time, "seconds")
 for games in range(0, 1000):
     # Options are split into 2. R, M and L. them being Random, Most and Least.
     # Frist pos is card from hand, then oppoennent. so RR is random card, random opponent. RL is random card and oppoennt with least cards
-    b_ops = ["RR", "RM", "RL", "MR", "MM", "ML", "LR", "LM", "LL", "QQ"]
+    b_ops = ["RR", "RM", "RL", "MR", "MM", "ML", "LR", "LM", "LL", "NN"]
     behaviour = []
     behaviour_num = []
     for i in range(0, 4):
@@ -604,6 +606,7 @@ for games in range(0, 1000):
         behaviour_num.append(chosen)
 
     # Run game
+    # print(behaviour)
     books = main_game(behaviour)
 
     # do overall algorithm scoring
@@ -612,14 +615,19 @@ for games in range(0, 1000):
         scoring[behaviour_num[i]][positions[i] - 1] = scoring[behaviour_num[i]][positions[i] - 1] + 1
         # increase how many games its in
         games_played[behaviour_num[i]] = games_played[behaviour_num[i]] + 1
-
+    if games % 100 == 0:
+        print("Test game:", games)
 
 print(scoring)
 print(scoring_analysis(scoring, games_played))
+win_anal = scoring[9][0] + scoring[9][1] / 2
+percent_win = (win_anal / games_played[9]) * 100
+run_time = run_time_calc()
+print("Fitness function:", CM.fitness(percent_win, train_time, run_time)) # Fitness 41.6654877302435
 
 # Plotting graph
-placements=["1","2","3","4"]
-scores={
+placements = ["1", "2", "3", "4"]
+scores = {
     'Random Random': scoring[0],
     'Random Most': scoring[1],
     'Random Least': scoring[2],
@@ -656,3 +664,40 @@ ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 
 plt.show()
+
+# Scores
+# 100 training  rounds, 1000 test:
+# --
+#     model = tf.keras.Sequential([
+#         tf.keras.layers.Input(shape=(state_dim,)),
+#         tf.keras.layers.Dense(64, activation='relu'),
+#         tf.keras.layers.Dense(64, activation='relu'),
+#         tf.keras.layers.Dense(action_dim)
+#     ])
+# Time taken: 685.2835369110107 seconds
+# Performance:3.38518519 (0.5 off best)
+# Action speed: ?
+# --
+# 200 rounds training, 1000 test!
+# --
+#     model = tf.keras.Sequential([
+#         tf.keras.layers.Input(shape=(state_dim,)),
+#         tf.keras.layers.Dense(64, activation='relu'),
+#         tf.keras.layers.Dense(64, activation='relu'),
+#         tf.keras.layers.Dense(action_dim)
+#     ])
+# Time taken: 1389.0456783771515 seconds
+# Performance:3.43099274 [0.1 off best]
+# Action speed: ?
+# --
+#     model = tf.keras.Sequential([
+#         tf.keras.layers.Input(shape=(state_dim,)),
+#         tf.keras.layers.Dense(32, activation='relu'),
+#         tf.keras.layers.Dropout(0.2),
+#         tf.keras.layers.Dense(32, activation='relu'),
+#         tf.keras.layers.Dropout(0.2),
+#         tf.keras.layers.Dense(action_dim)
+#     ])
+# Time taken: 1388.698704957962 seconds
+# Performance: 3.45588235 [best by 0.3]
+# Action speed: ?

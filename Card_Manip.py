@@ -1,6 +1,10 @@
 import random
 
 
+def fitness(percent_win, train_time, run_time):
+    return (percent_win - ((train_time / 60) + (run_time * 10)))
+
+
 class Deck:
     def __init__(self):
         self.top = random.randint(0, 51)
