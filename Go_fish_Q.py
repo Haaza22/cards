@@ -88,6 +88,7 @@ def train_q():
                 if np.random.rand() < explore_element:
                     # Make random move
                     guess_val, target = choose_action("RR", options, opponents, current_hand, hands, states[turn], turn)
+                    guess_val = guess_val+2
                 else:
                     # Optimal action
                     action_options = []
@@ -107,18 +108,20 @@ def train_q():
                     for j in range(0, len(ordered_actions)):
                         # Loop cards to find highest valid option
                         if ordered_actions[j] in action_options:
-                            target = ordered_actions[j][0]
+                            target = opponents[ordered_actions[j][0].index(ordered_actions[j][0])]
                             if len(ordered_actions[j]) == 2:
                                 guess_val = ordered_actions[j][1]
                             else:
                                 guess_val = ordered_actions[j][1:]
                             break
 
+
                 action_target = target
                 if int(turn) < int(target):
                     action_target = int(target) - 1
 
                 action = str(action_target) + str(guess_val)
+
 
                 # Setup
                 target_hand = hands[int(target)]
@@ -352,10 +355,10 @@ def main_game(behaviour):
             # getting cards can ask for and opponents can ask
             # Options is between 2 and 14, a number
             options = find_values(current_hand.cards)
-            opponents = valid_opponents(in_game, turn)
+            opponents_master = valid_opponents(in_game, turn)
 
             # Make guess
-            guess_val, target = choose_action(behaviour[turn], options, opponents, current_hand, hands, states[turn],
+            guess_val, target = choose_action(behaviour[turn], options, opponents_master, current_hand, hands, states[turn],
                                               turn)
 
             # Setup
@@ -363,8 +366,16 @@ def main_game(behaviour):
             current_turn_record[1] = target
             current_turn_record[2] = guess_val
 
+            if target not in opponents_master:
+                print(behaviour[turn])
+                print("Tar", target)
+                print("Opp", opponents_master)
+                print("Tur", turn)
+                print()
+                # target = opponents[0]
+
             # Do guess
-            target_hand, current_hand, correct = guess(target_hand, current_hand, guess_val)
+            target_hand, current_hand, correct = guess(target_hand, current_hand, guess_val+2)
 
             if correct:
                 extra_turn = True
@@ -448,11 +459,12 @@ def choose_action(behaviour, options, opponents, current_hand, hands, state, tur
         for j in range(0, len(ordered_actions)):
             # Loop cards to find highest valid option
             if ordered_actions[j] in action_options:
-                target_guessing = ordered_actions[j][0]
+                target_guessing = opponents[ordered_actions[j][0].index(ordered_actions[j][0])]
                 if len(ordered_actions[j]) == 2:
                     guessing_val = ordered_actions[j][1]
                 else:
                     guessing_val = ordered_actions[j][1:]
+                guessing_val = int(guessing_val) + 2
                 break
     else:
         # Card Choice
@@ -482,7 +494,7 @@ def choose_action(behaviour, options, opponents, current_hand, hands, state, tur
                 opponents)
         else:
             print("Behavour pt 1 doesnt exist")
-    return guessing_val, target_guessing
+    return (guessing_val-2), target_guessing
 
 
 def score_analysis(books):
@@ -557,7 +569,7 @@ print(scoring_analysis(scoring, games_played))
 win_anal = scoring[9][0] + scoring[9][1] / 2
 percent_win = (win_anal / games_played[9]) * 100
 run_time = run_time_calc()
-print("Fitness function:", CM.fitness(percent_win, train_time, run_time)) # Fitness 60.32376059613577
+print("Fitness function:", CM.fitness(percent_win, train_time, run_time)) # Fitness 65.26764934975424
 
 # Plotting graph
 placements = ["1", "2", "3", "4"]
@@ -573,24 +585,36 @@ scores = {
     'Least Least': scoring[8],
     'Q': scoring[9],
 }
-x = np.arange(len(placements))  # the label locations
-width = 0.12  # the width of the bars
+n_groups = len(placements)
+n_categories = len(scores)
+
+# Define narrower bar width to prevent overlapping
+bar_width = 0.9  # Adjust based on desired spacing
+
+# Create an index for each category within each group
+index = np.arange(n_groups) * n_categories  # Creates an array like [0, 1, 2, 3, ...]
 
 fig, ax = plt.subplots()
-offset = 0
 
-for attribute, measurement in scores.items():
-    rects = ax.bar(x + offset, measurement, width, label=attribute)
-    ax.bar_label(rects, padding=10)
-    offset += width  # Increase the offset for the next group of bars
+# Loop through categories and plot bars with specific offsets
+for i, (attribute, measurement) in enumerate(scores.items()):
+    rects = ax.bar(index + i * bar_width, measurement, width=bar_width, label=attribute)
+    ax.bar_label(rects, padding=8)
 
 # Improve readability
 ax.set_ylabel('Games in this position', fontsize=12)
 ax.set_title('Average placements', fontsize=14)
-ax.set_xticks(x + width * 10, placements)
-ax.legend(loc='upper left', fontsize=8, ncol=4)
 
-# Add grid lines
+# Set x-axis ticks and labels at correct positions
+ax.set_xticks(index + n_categories / 2, placements)
+ax.set_xlabel('Strategy', fontsize=12)
+
+# Rotate x-axis labels for better readability if many categories
+# if n_categories > 4:
+#     plt.xticks(rotation=45)  # Adjust rotation angle if needed
+
+# Add legend and grid lines
+ax.legend(loc='upper left', fontsize=8, ncol=4)
 ax.grid(axis='y')
 
 # Adjust plot borders

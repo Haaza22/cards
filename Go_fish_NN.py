@@ -137,7 +137,7 @@ def train_nn():
     discount_rate = 0.9
     explore_element = 0.1
     training = True
-    training_rounds = 200
+    training_rounds = 1
     current_training_round = 0
     behaviour = ['NN', 'NN', 'NN', 'NN']
     states = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]
@@ -638,26 +638,38 @@ scores = {
     'Least Random': scoring[6],
     'Last Most': scoring[7],
     'Least Least': scoring[8],
-    'Q': scoring[9],
+    'Neural Network': scoring[9],
 }
-x = np.arange(len(placements))  # the label locations
-width = 0.12  # the width of the bars
+n_groups = len(placements)
+n_categories = len(scores)
+
+# Define narrower bar width to prevent overlapping
+bar_width = 0.9  # Adjust based on desired spacing
+
+# Create an index for each category within each group
+index = np.arange(n_groups) * n_categories  # Creates an array like [0, 1, 2, 3, ...]
 
 fig, ax = plt.subplots()
-offset = 0
 
-for attribute, measurement in scores.items():
-    rects = ax.bar(x + offset, measurement, width, label=attribute)
-    ax.bar_label(rects, padding=10)
-    offset += width  # Increase the offset for the next group of bars
+# Loop through categories and plot bars with specific offsets
+for i, (attribute, measurement) in enumerate(scores.items()):
+    rects = ax.bar(index + i * bar_width, measurement, width=bar_width, label=attribute)
+    ax.bar_label(rects, padding=8)
 
 # Improve readability
 ax.set_ylabel('Games in this position', fontsize=12)
 ax.set_title('Average placements', fontsize=14)
-ax.set_xticks(x + width * 10, placements)
-ax.legend(loc='upper left', fontsize=8, ncol=4)
 
-# Add grid lines
+# Set x-axis ticks and labels at correct positions
+ax.set_xticks(index + n_categories / 2, placements)
+ax.set_xlabel('Strategy', fontsize=12)
+
+# Rotate x-axis labels for better readability if many categories
+# if n_categories > 4:
+#     plt.xticks(rotation=45)  # Adjust rotation angle if needed
+
+# Add legend and grid lines
+ax.legend(loc='upper left', fontsize=8, ncol=4)
 ax.grid(axis='y')
 
 # Adjust plot borders

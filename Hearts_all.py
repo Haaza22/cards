@@ -251,7 +251,7 @@ print(scoring_analysis(scoring, games_played))
 win_anal = scoring[6][0] + scoring[6][1] / 2
 percent_win = (win_anal / games_played[6]) * 100
 run_time = QL.run_time_calc()
-print("Fitness function Q:", CM.fitness(percent_win, QL.train_time, run_time))  # fittness is: 47.548330248657024
+print("Fitness function Q:", CM.fitness(percent_win, QL.train_time, run_time))  #
 win_anal = scoring[7][0] + scoring[7][1] / 2
 percent_win = (win_anal / games_played[7]) * 100
 run_time = NN.run_time_calc()
