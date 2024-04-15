@@ -292,11 +292,11 @@ def make_game(behaviour):
             else:
                 options, following = Hearts.calc_options_B(hands[current_player], current_turn_record[0])
 
-            if behaviour == "B":
+            if behaviour[current_player] == "B":
+                playing = belief_state.choose_card(hands[current_player], options, following)
+            else:
                 playing = choose_card_base(behaviour[current_player], hands[current_player], options,
                                            state[current_player])
-            else:
-                playing = belief_state.choose_card(hands[current_player], options, following)
 
             on_table, who_played, current_turn_record = Hearts.one_loop(current_player, starter, on_table, who_played,
                                                                         current_turn_record, playing)
@@ -381,7 +381,7 @@ print(scoring_analysis(scoring, games_played))
 win_anal = scoring[6][0] + scoring[6][1] / 2
 percent_win = (win_anal / games_played[6]) * 100
 run_time = run_time_calc()
-print("Fitness function:", CM.fitness(percent_win, train_time, run_time))  # Fitness is: 43.6974341419476
+print("Fitness function:", CM.fitness(percent_win, train_time, run_time))  # Fitness is: 49.79137878688515
 
 # Plotting graph
 placements = ["1", "2", "3", "4"]
@@ -392,7 +392,7 @@ scores = {
     'Random avoid hearts': scoring[3],
     'Lowest avoid hearts': scoring[4],
     'Highest avoid hearts': scoring[5],
-    'Genetic': scoring[6],
+    'Bayesian': scoring[6],
 }
 x = np.arange(len(placements))  # the label locations
 width = 0.12  # the width of the bars
