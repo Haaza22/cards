@@ -381,6 +381,8 @@ print(scoring_analysis(scoring, games_played))
 win_anal = scoring[6][0] + scoring[6][1] / 2
 percent_win = (win_anal / games_played[6]) * 100
 run_time = run_time_calc()
+print("Run time:", run_time, "seconds")
+print("Train time:", train_time, "seconds")
 print("Fitness function:", CM.fitness(percent_win, train_time, run_time))  # Fitness is: 49.79137878688515
 
 # Plotting graph

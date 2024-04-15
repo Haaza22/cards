@@ -565,10 +565,11 @@ for games in range(0, 1000):
 
 print(scoring)
 print(scoring_analysis(scoring, games_played))
-print(scoring_analysis(scoring, games_played))
 win_anal = scoring[9][0] + scoring[9][1] / 2
 percent_win = (win_anal / games_played[9]) * 100
 run_time = run_time_calc()
+print("Run time:", run_time, "seconds")
+print("Train time:", train_time, "seconds")
 print("Fitness function:", CM.fitness(percent_win, train_time, run_time)) # Fitness 65.26764934975424
 
 # Plotting graph

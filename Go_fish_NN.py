@@ -137,7 +137,7 @@ def train_nn():
     discount_rate = 0.9
     explore_element = 0.1
     training = True
-    training_rounds = 1
+    training_rounds = 100
     current_training_round = 0
     behaviour = ['NN', 'NN', 'NN', 'NN']
     states = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]
@@ -624,6 +624,7 @@ win_anal = scoring[9][0] + scoring[9][1] / 2
 percent_win = (win_anal / games_played[9]) * 100
 run_time = run_time_calc()
 print("Run time:", run_time, "seconds")
+print("Train time:", train_time, "seconds")
 print("Fitness function:", CM.fitness(percent_win, train_time, run_time)) # Fitness 41.6654877302435
 
 # Plotting graph

@@ -345,16 +345,19 @@ win_anal = scoring[9][0] + scoring[9][1] / 2
 percent_win = (win_anal / games_played[9]) * 100
 run_time = QL.run_time_calc()
 print("Run time:", run_time, "seconds")
+print("Train time:", QL.train_time, "seconds")
 print("Fitness function Q:", CM.fitness(percent_win, QL.train_time, run_time))  # Fitness
 win_anal = scoring[10][0] + scoring[10][1] / 2
 percent_win = (win_anal / games_played[10]) * 100
 run_time = NN.run_time_calc()
 print("Run time:", run_time, "seconds")
+print("Train time:", NN.train_time, "seconds")
 print("Fitness function NN:", CM.fitness(percent_win, NN.train_time, run_time))  # Fitness
 win_anal = scoring[11][0] + scoring[11][1] / 2
 percent_win = (win_anal / games_played[11]) * 100
 run_time = BAY.run_time_calc()
 print("Run time:", run_time, "seconds")
+print("Train time:", BAY.train_time, "seconds")
 print("Fitness function BAY:", CM.fitness(percent_win, BAY.train_time, run_time))  # Fitness
 
 # Plotting graph

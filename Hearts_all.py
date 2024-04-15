@@ -245,20 +245,28 @@ for game in range(0, 1000):
         scoring[behaviour_num[i]][positions[i] - 1] = scoring[behaviour_num[i]][positions[i] - 1] + 1
         # increase how many games its in
         games_played[behaviour_num[i]] = games_played[behaviour_num[i]] + 1
+    if game % 100 == 0:
+        print("Testing game", game)
 
 print(scoring)
 print(scoring_analysis(scoring, games_played))
 win_anal = scoring[6][0] + scoring[6][1] / 2
 percent_win = (win_anal / games_played[6]) * 100
 run_time = QL.run_time_calc()
+print("Run time:", run_time, "seconds")
+print("Train time:", QL.train_time, "seconds")
 print("Fitness function Q:", CM.fitness(percent_win, QL.train_time, run_time))  #
 win_anal = scoring[7][0] + scoring[7][1] / 2
 percent_win = (win_anal / games_played[7]) * 100
 run_time = NN.run_time_calc()
+print("Run time:", run_time, "seconds")
+print("Train time:", NN.train_time, "seconds")
 print("Fitness function NN:", CM.fitness(percent_win, NN.train_time, run_time))
 win_anal = scoring[8][0] + scoring[8][1] / 2
 percent_win = (win_anal / games_played[8]) * 100
 run_time = BAY.run_time_calc()
+print("Run time:", run_time, "seconds")
+print("Train time:", BAY.train_time, "seconds")
 print("Fitness function BAY:", CM.fitness(percent_win, BAY.train_time, run_time))
 
 
