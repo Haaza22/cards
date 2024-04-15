@@ -5,8 +5,6 @@ import matplotlib.pyplot as plt
 import itertools
 import time
 from collections import defaultdict
-import tensorflow as tf
-
 
 
 def run_time_calc():
@@ -17,12 +15,14 @@ def run_time_calc():
     handt4 = CM.Hand()
     handst = [handt1, handt2, handt3, handt4]
     CM.deal_deck(deckt, handt1, handt2, handt3, handt4, 5)
+    belief_state = BeliefState(4)
     start_time = time.time()
     # def choose_action(behaviour, options, opponents, current_hand, hands, state, turn):
-    choose_action("NN", find_values(handt1.cards), [0, 1, 2], handt1, handst, [0, 4, 7], 0)
+    belief_state.choose_card(handt1, [handt1.cards[0].val, handt2.cards[1].val], 0)
     end_time = time.time()
     run_time = end_time - start_time
     return run_time
+
 
 class BeliefState:
     def __init__(self, num_players):
@@ -30,84 +30,41 @@ class BeliefState:
         self.deck = set(range(52))  # Represent cards as integers (0-51)
         self.beliefs = defaultdict(float)  # Key: (player_id, card), Value: probability
 
-    def update_card_played(self, card_val, player_id):
+    def update_card_played(self, card_val, player_id, asked_id):
+        all_suits = CM.all_nums(card_val)
+        for i in range(0, 4):
+            self.beliefs[(player_id, all_suits[i])] = self.beliefs[(player_id, all_suits[i])] + 1
+            self.beliefs[(asked_id, all_suits[i])] = self.beliefs[(asked_id, all_suits[i])] - 1
 
-        self.beliefs[(player_id, card)]
+    def update_fish(self, player_id):
+        for card in self.deck:
+            self.beliefs[(player_id, card)] = self.beliefs[(player_id, card)] + 0.1
 
-    def update_void(self, suit_given, player_id):
-        if suit_given == 'C':
-            lower = 0
-            upper = 12
-        elif suit_given == 'D':
-            lower = 13
-            upper = 25
-        elif suit_given == 'H':
-            lower = 26
-            upper = 38
-        else:  # Spade
-            lower = 29
-            upper = 51
+    def update_book(self, card_val):
+        # take val like 10 then will get rid of all 10 cards from all suits
+        all_suits = CM.all_nums(card_val)
+        for card in all_suits:
+            self.deck.remove(card)
+            for player_id in range(0, 4):
+                if (player_id, card) in self.beliefs:
+                    del self.beliefs[(player_id, card)]
 
-        for player in range(self.num_players):
-            if player != player_id:
-                for card in self.deck:
-                    if lower <= card <= upper:  # if suit then remove it
-                        if (player, card) in self.beliefs:
-                            del self.beliefs[(player, card)]
-
-    def choose_card(self, hand_class, options, following):
+    def choose_card(self, hand_class, options, cur_player):
         # Prioritize following suit if possible
         hand = hand_class.cards
-
-        if following:
-            # start by calculating the firsty cards score
-            best_score = self.evaluate_card(hand[options[0]])
-            best_pos = 0
-            for i in range(1, len(options)):
-                cur_score = self.evaluate_card(hand[options[i]])
-                if cur_score >= best_score:
-                    best_score = cur_score
-                    best_pos = i
-            return hand_class.remove_card(options[best_pos])
+        best_score = 0
+        if cur_player != 0:
+            best_ask = [options[0], 0]
         else:
-            best_heart = [-1, -1]
-            other = [-1, -1]
-            for i in range(0, len(options)):
-                if hand[options[i]].suit == "S" and hand[options[i]].val == 12:
-                    return hand_class.remove_card(options[i])
-                elif hand[options[i]].suit == "H" and hand[options[i]].val > best_heart[0]:
-                    best_heart[0] = hand[options[i]].val
-                    best_heart[1] = i
-                else:
-                    if hand[options[i]].val > other[0]:
-                        other[0] = hand[options[i]].val
-                        other[1] = i
-            if best_heart[0] != [-1]:
-                return hand_class.remove_card(options[best_heart[1]])
-            return hand_class.remove_card(options[other[1]])
+            best_ask = [options[0], 1]
 
-    def evaluate_card(self, card):
-        score = 0
-        if card.suit == 'H':
-            score = score + self.calculate_heart_capture_risk(card)
-        elif card.suit == 'S' and card.val == 12:  # Queen of Spades
-            score = score + self.calculate_queen_capture_risk()
-        return score
-
-    def calculate_heart_capture_risk(self, card):
-        capture_risk = 0
-        for unseen_card in self.beliefs:
-            if unseen_card != card and unseen_card.suit == 'H':
-                # Consider the probability of the unseen card being a heart
-                capture_risk = capture_risk + self.beliefs[unseen_card]
-        if card.suit == 'H':
-            # if you play a high heart, youre likely to score
-            capture_risk = capture_risk * (1 - card.val / 13)
-        return capture_risk
-
-    def calculate_queen_capture_risk(self):
-        # need to see if king and ace are left
-        return 0
+        for player_id in range(0, 4):
+            if player_id != cur_player:
+                for i in range(0, len(options)):
+                    if self.beliefs[(player_id, options[i])] >= best_score:
+                        best_score = self.beliefs[(player_id, options[i])]
+                        best_ask = [options[i], player_id]
+        return best_ask[0] - 2, best_ask[1]
 
 
 def train_bays():
@@ -117,7 +74,7 @@ def train_bays():
     training = True
     training_rounds = 200
     current_training_round = 0
-    behaviour = ['NN', 'NN', 'NN', 'NN']
+    behaviour = ['BB', 'BB', 'BB', 'BB']
     states = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]
 
     while training:
@@ -144,6 +101,8 @@ def train_bays():
         deck, hand1, hand2, hand3, hand4 = CM.deal_deck(deck, hand1, hand2, hand3, hand4, start_cards)
         hands = [hand1, hand2, hand3, hand4]
 
+        belief_state = BeliefState(4)
+
         while playing:
             start_books = books[turn]
             extra_turn = False
@@ -161,6 +120,7 @@ def train_bays():
                 if current_hand.size == 0 and pond_exists:
                     current_hand.add_card(deck.draw_card())
                     in_game[turn] = True
+                    belief_state.update_fish(turn)
                     if deck.size == 0:
                         pond_exists = False
 
@@ -169,21 +129,23 @@ def train_bays():
                 options = find_values(current_hand.cards)
                 opponents = valid_opponents(in_game, turn)
 
-                guess_val, target = agent.select_action(states[turn], options, current_hand, hands, turn, opponents)
-
-                action_target = target
-                if int(turn) < int(target):
-                    action_target = int(target) - 1
+                if np.random.rand() < 0.05:
+                    guess_val, action_target = belief_state.choose_card(current_hand, options, turn)
+                else:
+                    guess_val, action_target = choose_action("RR", options, opponents, current_hand, hands,
+                                                             states[turn], turn)
 
                 action = str(action_target) + str(guess_val)
                 action_num = int(action_target) * 13 + int(guess_val)
                 # Setup
-                target_hand = hands[int(target)]
-                current_turn_record[1] = target
+                target_hand = hands[int(action_target)]
+                current_turn_record[1] = action_target
                 current_turn_record[2] = guess_val
 
                 # Do guess
                 target_hand, current_hand, correct = guess(target_hand, current_hand, (guess_val + 2))
+
+                belief_state.update_card_played(guess_val, turn, action_target)
 
                 if correct:
                     extra_turn = True
@@ -192,6 +154,7 @@ def train_bays():
                     # Go fish
                     new_card = deck.draw_card()
                     current_hand.add_card(new_card)
+                    belief_state.update_fish(turn)
                     if deck.size == 0:
                         pond_exists = False
                     if new_card.val == guess_val:
@@ -200,14 +163,13 @@ def train_bays():
 
                 # check if targets last card was taken
                 if target_hand.size == 0:
-                    in_game[int(target)] = False
+                    in_game[int(action_target)] = False
 
                 # check to see if game is over
                 alive = 0
                 for player in in_game:
                     if player:
                         alive = alive + 1
-
 
             elif alive == 1 and pond_exists:
                 # if no one else is a live but the pond eixsts
@@ -222,30 +184,12 @@ def train_bays():
                 current_hand = remove_set(current_hand, set)
                 books[turn] = books[turn] + 1
                 what_booked.append(set)
+                belief_state.update_book(set)
 
             if current_hand.size == 0:
                 in_game[turn] = False
 
             hands[turn] = current_hand
-
-            # Update Q
-            next_state = states[turn]
-            reward = calc_reward(start_books, books[turn], extra_turn)
-            # Update Q-table
-            agent.memory.push((states[turn], action_num, reward, next_state, False))
-            episode_reward[player] += reward
-            agent.update_model()
-
-            # update_states
-            update_pos = 0
-            for i in range(0, 4):
-                if i != turn:
-                    # Update the right one. so if 0 guess, then 1 0, 2 0 and 3 0 would need it
-                    # If 1 guessed then 0 0, 2 1 and 3 2
-                    # If 2 guessed then 0 2, 1 2 and 3 3
-                    # If 3 guessed then 0 3, 1 3 and 2 3
-                    states[i][update_pos] = guess_val
-                    update_pos = update_pos + 1
 
             if alive > 1 or pond_exists:
                 if not extra_turn:
@@ -379,6 +323,8 @@ def main_game(behaviour):
     deck, hand1, hand2, hand3, hand4 = CM.deal_deck(deck, hand1, hand2, hand3, hand4, start_cards)
     hands = [hand1, hand2, hand3, hand4]
 
+    belief_state = BeliefState(4)
+
     while playing:
         extra_turn = False
         current_turn_record = [turn, -1, -1, False, False]
@@ -394,6 +340,7 @@ def main_game(behaviour):
         if ((current_hand.size == 0 and pond_exists) or current_hand.size > 0) and alive > 1:
             if current_hand.size == 0 and pond_exists:
                 current_hand.add_card(deck.draw_card())
+                belief_state.update_fish(turn)
                 in_game[turn] = True
                 if deck.size == 0:
                     pond_exists = False
@@ -404,22 +351,25 @@ def main_game(behaviour):
             opponents_main = valid_opponents(in_game, turn)
 
             # Make guess
-            guess_val, target = choose_action(behaviour[turn], options, opponents_main, current_hand, hands,
-                                              states[turn], turn)
+            if behaviour[turn] == "BB":
+                if np.random.rand() < 0.05:
+                    guess_val, target = belief_state.choose_card(current_hand, options, turn)
+                else:
+                    guess_val, target = choose_action("RR", options, opponents_main, current_hand, hands, states[turn],
+                                                      turn)
+            else:
+                guess_val, target = choose_action(behaviour[turn], options, opponents_main, current_hand, hands,
+                                                  states[turn], turn)
 
             # Setup
             target_hand = hands[int(target)]
             current_turn_record[1] = target
             current_turn_record[2] = guess_val
 
-            if target not in opponents_main:
-                print(behaviour[turn])
-                print("Tar", target)
-                print("Opp", opponents_main)
-                print()
-
             # Do guess
             target_hand, current_hand, correct = guess(target_hand, current_hand, (guess_val + 2))
+
+            belief_state.update_card_played(guess_val, turn, target)
 
             if correct:
                 extra_turn = True
@@ -428,6 +378,7 @@ def main_game(behaviour):
                 # Go fish
                 new_card = deck.draw_card()
                 current_hand.add_card(new_card)
+                belief_state.update_fish(turn)
                 if deck.size == 0:
                     pond_exists = False
                 if new_card.val == guess_val:
@@ -457,6 +408,7 @@ def main_game(behaviour):
             current_hand = remove_set(current_hand, set)
             books[turn] = books[turn] + 1
             what_booked.append(set)
+            belief_state.update_book(set)
 
         if current_hand.size == 0:
             in_game[turn] = False
@@ -481,7 +433,7 @@ def count_vals_in_hand(hand):
 
 def choose_action(behaviour, options, opponents_action_choice, current_hand, hands, state, turn):
     if behaviour == "BB" and np.random.rand() < 0.05:
-        guessing_val, target_guessing = None
+        print("BB was used in thing")
     else:
         # Card Choice
         if behaviour[0] == 'R' or random.randint(1, 4) == 1 or behaviour[0] == 'N':
@@ -588,7 +540,7 @@ win_anal = scoring[9][0] + scoring[9][1] / 2
 percent_win = (win_anal / games_played[9]) * 100
 run_time = run_time_calc()
 print("Run time:", run_time, "seconds")
-print("Fitness function:", CM.fitness(percent_win, train_time, run_time)) # Fitness 41.6654877302435
+print("Fitness function:", CM.fitness(percent_win, train_time, run_time))  # Fitness 63.167945372724866
 
 # Plotting graph
 placements = ["1", "2", "3", "4"]

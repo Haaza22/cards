@@ -1,4 +1,4 @@
-]import random
+import random
 import Card_Manip
 import Hearts
 import numpy as np
