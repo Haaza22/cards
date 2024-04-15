@@ -5,6 +5,7 @@ import numpy as np
 import itertools
 import matplotlib.pyplot as plt
 import time
+from collections import defaultdict
 
 
 # import keras
@@ -18,8 +19,9 @@ def run_time_calc():
     handt3 = CM.Hand()
     handt4 = CM.Hand()
     CM.deal_deck(deckt, handt1, handt2, handt3, handt4, 13)
+    belief_state = BeliefState(4)
     start_time = time.time()
-    choose_card_base("Q", handt1, [0, 1, 2, 3, 4, 5, 6], [2, 7])
+    belief_state.choose_card(handt1, [0, 1, 2, 3, 4, 5, 6], True)
     end_time = time.time()
     run_time = end_time - start_time
     return run_time
@@ -79,60 +81,10 @@ def choose_card_base(behaviour, current_hand, options, state):
             playing = choose_card_base("L", current_hand, new_options, state)
         else:
             playing = choose_card_base("Hi", current_hand, new_options, state)
-    elif behaviour == 'Q':
-        # Optimal action
-        action_options = []
-        # Make options in form of 'H2' so can be checked agaianst actions
-        for option in options:
-            cur_card = current_hand.cards[option]
-            action_options.append(str(cur_card.suit) + str(cur_card.val))
-
-        # Get all q values
-        index = get_state_index(state)
-        q_values = q_table[index]
-        ordered_actions = [action_space[j] for j in np.argsort(q_values)]
-        # Action index list! order them, 0 best, 51 worst
-
-        for j in range(0, len(ordered_actions)):
-            # Loop cards to find highest valid option
-            if ordered_actions[j] in action_options:
-                position_in_hand = action_options.index(ordered_actions[j])
-                playing = current_hand.remove_card(options[position_in_hand])
-                break
     else:
         playing = None
         print("Behaviour should be Q, R, L, Hi, He1, He2 or He3")
     return playing
-
-
-def update_q_table(state, action, reward, next_state, learn_rate, discount_rate):
-    state_index = get_state_index(state)
-    next_state_index = get_state_index(next_state)
-
-    # Get the index of the action in the action space
-    action_index = action_space.index(action)
-
-    # Update the Q-value using the Q-learning update rule
-    q_table[state_index, action_index] += learn_rate * (
-            reward + discount_rate * np.max(q_table[next_state_index]) - q_table[state_index, action_index])
-
-
-def initialize_state_space():
-    # statspace is cards on table(52 bool), previously played (52 bool) and current score (27)
-    hearts_on_table_vals = list(range(4))  # 0-3, only numbers of possible hearts on table
-    curr_win_val = list(
-        range(53))  # 0-52, each number being a card (0 as no cards on table,1 at 2 of clubs, 51 as ace of spades)
-    # player_scores_val = list(range(27))  # Possible scores from 0 to max_score (26)
-
-    state_space = list(itertools.product(hearts_on_table_vals, curr_win_val))
-
-    return state_space, len(state_space)
-
-
-def get_state_index(state):
-    # Convert the state tuple to a hashable representation
-    index = 53 * state[0] + state[1]
-    return index
 
 
 def count_hearts(table):
@@ -143,16 +95,104 @@ def count_hearts(table):
     return hearts
 
 
-def train_q():
+class BeliefState:
+    def __init__(self, num_players):
+        self.num_players = num_players
+        self.deck = set(range(52))  # Represent cards as integers (0-51)
+        self.beliefs = defaultdict(float)  # Key: (player_id, card), Value: probability
+
+    def update_card_played(self, card, player_id):
+        self.deck.remove(card)
+        if (player_id, card) in self.beliefs:
+            del self.beliefs[(player_id, card)]  # Remove played card from beliefs
+
+    def update_void(self, suit_given, player_id):
+        if suit_given == 'C':
+            lower = 0
+            upper = 12
+        elif suit_given == 'D':
+            lower = 13
+            upper = 25
+        elif suit_given == 'H':
+            lower = 26
+            upper = 38
+        else:  # Spade
+            lower = 29
+            upper = 51
+
+        for player in range(self.num_players):
+            if player != player_id:
+                for card in self.deck:
+                    if lower <= card <= upper:  # if suit then remove it
+                        if (player, card) in self.beliefs:
+                            del self.beliefs[(player, card)]
+
+    def choose_card(self, hand_class, options, following):
+        # Prioritize following suit if possible
+        hand = hand_class.cards
+
+        if following:
+            # start by calculating the firsty cards score
+            best_score = self.evaluate_card(hand[options[0]])
+            best_pos = 0
+            for i in range(1, len(options)):
+                cur_score = self.evaluate_card(hand[options[i]])
+                if cur_score >= best_score:
+                    best_score = cur_score
+                    best_pos = i
+            return hand_class.remove_card(options[best_pos])
+        else:
+            best_heart = [-1, -1]
+            other = [-1, -1]
+            for i in range(0, len(options)):
+                if hand[options[i]].suit == "S" and hand[options[i]].val == 12:
+                    return hand_class.remove_card(options[i])
+                elif hand[options[i]].suit == "H" and hand[options[i]].val > best_heart[0]:
+                    best_heart[0] = hand[options[i]].val
+                    best_heart[1] = i
+                else:
+                    if hand[options[i]].val > other[0]:
+                        other[0] = hand[options[i]].val
+                        other[1] = i
+            if best_heart[0] != [-1]:
+                return hand_class.remove_card(options[best_heart[1]])
+            return hand_class.remove_card(options[other[1]])
+
+    def evaluate_card(self, card):
+        score = 0
+        if card.suit == 'H':
+            score = score + self.calculate_heart_capture_risk(card)
+        elif card.suit == 'S' and card.val == 12:  # Queen of Spades
+            score = score + self.calculate_queen_capture_risk()
+        return score
+
+    def calculate_heart_capture_risk(self, card):
+        capture_risk = 0
+        for unseen_card in self.beliefs:
+            if unseen_card != card and unseen_card.suit == 'H':
+                # Consider the probability of the unseen card being a heart
+                capture_risk = capture_risk + self.beliefs[unseen_card]
+        if card.suit == 'H':
+            # if you play a high heart, youre likely to score
+            capture_risk = capture_risk * (1 - card.val / 13)
+        return capture_risk
+
+    def calculate_queen_capture_risk(self):
+        # need to see if king and ace are left
+        return 0
+
+
+def train_bayes():
     learn_rate = 0.1
     discount_rate = 0.9
     explore_element = 0.1
     training = True
     training_rounds = 10000
     current_training_round = 0
-    behaviour = ['Q', 'Q', 'Q', 'Q']
+    behaviour = ['B', 'B', 'B', 'B']
 
     while training:
+        belief_state = BeliefState(4)
         # Heart setup
         played_cards = []
         hands, current_player = Hearts.setup(behaviour)
@@ -188,44 +228,23 @@ def train_q():
                 # Options is a list contianing all the positions in the hand which are valid cards to play
                 if starter:
                     options = list(range(0, len(hands[current_player].cards)))
+                    following = True
                 else:
-                    options = Hearts.calc_options(hands[current_player], current_turn_record[0])
+                    options, following = Hearts.calc_options_B(hands[current_player], current_turn_record[0])
 
-                # Choose action
-                if np.random.rand() < explore_element:
-                    # Random action
-                    position_in_hand = random.randint(0, len(options) - 1)
-                    action_form = str(hands[current_player].cards[position_in_hand].suit) + str(
-                        hands[current_player].cards[position_in_hand].val)
-                    playing = hands[current_player].remove_card(options[position_in_hand])
-                else:
-                    # Optimal action
-                    action_options = []
-                    # Make options in form of 'H2' so can be checked agaianst actions
-                    for option in options:
-                        cur_card = hands[current_player].cards[option]
-                        action_options.append(str(cur_card.suit) + str(cur_card.val))
-
-                    # Get all q values
-                    index = get_state_index(state[current_player])
-                    q_values = q_table[index]
-                    ordered_actions = [action_space[j] for j in np.argsort(q_values)]
-                    # Action index list! order them, 0 best, 51 worst
-
-                    for j in range(0, len(ordered_actions)):
-                        # Loop cards to find highest valid option
-                        if ordered_actions[j] in action_options:
-                            position_in_hand = action_options.index(ordered_actions[j])
-                            action_form = str(hands[current_player].cards[position_in_hand].suit) + str(
-                                hands[current_player].cards[position_in_hand].val)
-                            playing = hands[current_player].remove_card(options[position_in_hand])
-                            break
+                playing = belief_state.choose_card(hands[current_player], options, following)
 
                 # Take action
-                action[current_player] = action_form
+                action[current_player] = str(playing.suit) + str(playing.val)
                 on_table, who_played, current_turn_record = Hearts.one_loop(current_player, starter, on_table,
                                                                             who_played,
                                                                             current_turn_record, playing)
+
+                # Bayes update
+                if following:
+                    belief_state.update_card_played(CM.card_number(action[current_player]), current_player)
+                else:
+                    belief_state.update_void(on_table[0].suit, current_player)
 
                 current_player = Hearts.next(current_player)
                 starter = False
@@ -236,32 +255,11 @@ def train_q():
                                                                                      current_turn_record, played_cards)
 
             new_score = Hearts.count_points(won_cards)
-            for j in range(0, 4):
-                ## Making next state on_table by blank is, a bit upsetting, but i cant think of a way around it
-                # Check reward of new stats
-                next_state = [0, 0]
-                reward = calc_reward(cur_score, new_score, current_player, j)
-                # Update Q-table
-                update_q_table(state[j], action[j], reward, next_state, learn_rate, discount_rate)
             cur_score = new_score
 
         current_training_round = current_training_round + 1
         if current_training_round >= training_rounds:
             training = False
-
-
-def calc_reward(pre_points, cur_points, start_player, player_evaluated):
-    reward = 0
-    if pre_points <= cur_points:
-        # If didn't gain points gain rewards
-        reward = reward + 1
-        if start_player == player_evaluated:
-            # If in control and didn't gain points gain reward
-            reward = reward + 1
-    else:
-        # If gained poitns loose reward, points euqal to score gained
-        reward = reward - (cur_points - pre_points)
-    return reward
 
 
 def make_game(behaviour):
@@ -271,8 +269,7 @@ def make_game(behaviour):
     turn_record = []
     played_cards = []
     current_scores = [0, 0, 0, 0]
-
-    print(hands[0].cards)
+    belief_state = BeliefState(4)
 
     state = [[0, 0], [0, 0], [0, 0], [0, 0]]
     for i in range(0, 13):
@@ -291,21 +288,32 @@ def make_game(behaviour):
             # Options is a list contianing all the positions in the hand which are valid cards to play
             if starter:
                 options = list(range(0, len(hands[current_player].cards)))
+                following = True
             else:
-                options = Hearts.calc_options(hands[current_player], current_turn_record[0])
+                options, following = Hearts.calc_options_B(hands[current_player], current_turn_record[0])
 
-            playing = choose_card_base(behaviour[current_player], hands[current_player], options, state[current_player])
+            if behaviour == "B":
+                playing = choose_card_base(behaviour[current_player], hands[current_player], options,
+                                           state[current_player])
+            else:
+                playing = belief_state.choose_card(hands[current_player], options, following)
 
             on_table, who_played, current_turn_record = Hearts.one_loop(current_player, starter, on_table, who_played,
                                                                         current_turn_record, playing)
 
-            current_scores = Hearts.count_points(won_cards)
-            current_player = Hearts.next(current_player)
+            if following:
+                belief_state.update_card_played(CM.card_number(str(playing.suit) + str(playing.val)), current_player)
+            else:
+                belief_state.update_void(on_table[0].suit, current_player)
+
             starter = False
+            current_player = Hearts.next(current_player)
+            current_scores = Hearts.count_points(won_cards)
 
         won_cards, turn_record, current_player, played_cards = Hearts.round_over(who_played, on_table, won_cards,
                                                                                  turn_record,
                                                                                  current_turn_record, played_cards)
+
     points = Hearts.count_points(won_cards)
     positions = win_order(points)
 
@@ -336,24 +344,17 @@ for val in ranks:
 # for action in action_space:
 #     print(action)
 
-# Trying statspace of cards on table, previously played and current score
-# So that's one 52 size bool, another 52 size bool, and a number between 0 and 26, so a 27. so 73008 states...
-state_space, num_states = initialize_state_space()
-num_actions = len(action_space)
-q_table = np.zeros((num_states, num_actions))
-# print(q_table)
-
 training_route = True
 
 print("Train start")
 start_time = time.time()
-train_q()
+train_bayes()
 end_time = time.time()
 train_time = end_time - start_time
 print("Trained in", train_time, "seconds")
 
 for game in range(0, 1000):
-    b_ops = ["R", "L", "Hi", "He1", "He2", "He3", "Q"]
+    b_ops = ["R", "L", "Hi", "He1", "He2", "He3", "B"]
     behaviour_pre = []
     behaviour_num = []
 
@@ -380,7 +381,7 @@ print(scoring_analysis(scoring, games_played))
 win_anal = scoring[6][0] + scoring[6][1] / 2
 percent_win = (win_anal / games_played[6]) * 100
 run_time = run_time_calc()
-print("Fitness function:", CM.fitness(percent_win, train_time, run_time))  # fittness is: 47.548330248657024
+print("Fitness function:", CM.fitness(percent_win, train_time, run_time))  # Fitness is: 43.6974341419476
 
 # Plotting graph
 placements = ["1", "2", "3", "4"]
@@ -391,7 +392,7 @@ scores = {
     'Random avoid hearts': scoring[3],
     'Lowest avoid hearts': scoring[4],
     'Highest avoid hearts': scoring[5],
-    'Q learning': scoring[6],
+    'Genetic': scoring[6],
 }
 x = np.arange(len(placements))  # the label locations
 width = 0.12  # the width of the bars

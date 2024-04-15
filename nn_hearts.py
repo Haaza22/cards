@@ -6,6 +6,8 @@ import itertools
 import matplotlib.pyplot as plt
 import time
 import tensorflow as tf
+# from keras import layers
+# from keras import activations
 from sklearn.model_selection import train_test_split
 
 
@@ -126,10 +128,12 @@ def count_hearts(table):
 def create_q_network(state_dim, action_dim):
     model = tf.keras.Sequential([
         tf.keras.layers.Input(shape=(2,)),
+        tf.keras.layers.Dense(16, activation='sigmoid'),
+        tf.keras.layers.Dropout(0.5),
         tf.keras.layers.Dense(32, activation='relu'),
-        tf.keras.layers.Dropout(0.2),
-        tf.keras.layers.Dense(32, activation='relu'),
-        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(64, activation='relu'),
+        tf.keras.layers.Dropout(0.5),
+        tf.keras.layers.Dense(52, activation='sigmoid'),
         tf.keras.layers.Dense(action_dim)
     ])
     return model
@@ -233,7 +237,7 @@ class DQNAgent:
 def train_nn():
     training_data = []
     training = True
-    training_rounds = 200
+    training_rounds = 100
     current_round = 0
     while training:
         played_cards = []
@@ -448,7 +452,8 @@ print(scoring_analysis(scoring, games_played))
 win_anal = scoring[6][0] + scoring[6][1] / 2
 percent_win = (win_anal / games_played[6]) * 100
 run_time = run_time_calc()
-print("Fitness function:", CM.fitness(percent_win, train_time, run_time)) # Fitness 24.46660559177399
+print("Run time:", run_time, "seconds")
+print("Fitness function:", CM.fitness(percent_win, train_time, run_time))
 
 # Plotting graph
 placements = ["1", "2", "3", "4"]
@@ -490,9 +495,25 @@ tf.get_logger().setLevel('INFO')
 #         tf.keras.layers.Dense(64, activation='relu'),
 #         tf.keras.layers.Dense(action_dim)
 #     ])
-# Time taken: 1042.5467159748077 seconds
-# Performance: 2.482882882882883 (0.3 off best)
-# Action speed: ?
+# Time taken: 1038.2910697460175 seconds
+# Performance: 2.5631399317406145
+# Action speed: 0.027246475219726562 seconds
+# Main fitness: 27.64452708878208
+# --
+#     model = tf.keras.Sequential([
+#         tf.keras.layers.Input(shape=(2,)),
+#         tf.keras.layers.Dense(16, activation='sigmoid'),
+#         tf.keras.layers.Dropout(0.5),
+#         tf.keras.layers.Dense(32, activation='relu'),
+#         tf.keras.layers.Dense(64, activation='relu'),
+#         tf.keras.layers.Dropout(0.5),
+#         tf.keras.layers.Dense(52, activation='sigmoid'),
+#         tf.keras.layers.Dense(action_dim)
+#     ])
+# Time taken: 1023.0342795848846 seconds
+# Performance: 2.607142857142857
+# Action speed: 0.02358078956604004 seconds
+# Main fitness: 28.338620777924856
 # --
 #     model = tf.keras.Sequential([
 #         tf.keras.layers.Input(shape=(2,)),
@@ -502,9 +523,10 @@ tf.get_logger().setLevel('INFO')
 #         tf.keras.layers.Dropout(0.2),
 #         tf.keras.layers.Dense(action_dim)
 #     ])
-# Time taken: 1028.2004833221436 seconds
+# Time taken: 1016.3453371524811 seconds
 # Performance: 2.557142857142857 (0.1 off best)
-# Action speed: ?
+# Action speed: 0.024005413055419922 seconds
+# Main fitness: 25.795309471648974
 # --
 #     model = tf.keras.Sequential([
 #         tf.keras.layers.Input(shape=(2,)),
@@ -514,11 +536,27 @@ tf.get_logger().setLevel('INFO')
 #         tf.keras.layers.Dropout(0.2),
 #         tf.keras.layers.Dense(action_dim)
 #     ])
-# Time taken: 1038.942824602127 seconds
+# Time taken: 1018.9866826534271 seconds
 # Performance: 2.625 (The Best!)
-# Action speed: ?
+# Action speed: 0.024296283721923828 seconds
+# Main fitness: 25.030236609494533
 
-# Test Regular Q with 200 games... still better
 
+# 100 rounds training
+# --
+#     model = tf.keras.Sequential([
+#         tf.keras.layers.Input(shape=(2,)),
+#         tf.keras.layers.Dense(16, activation='sigmoid'),
+#         tf.keras.layers.Dropout(0.5),
+#         tf.keras.layers.Dense(32, activation='relu'),
+#         tf.keras.layers.Dense(64, activation='relu'),
+#         tf.keras.layers.Dropout(0.5),
+#         tf.keras.layers.Dense(52, activation='sigmoid'),
+#         tf.keras.layers.Dense(action_dim)
+#     ])
+# Time taken: 509.76108980178833 seconds
+# Performance: 2.6196213425129087
+# Action speed: 0.02400517463684082 seconds
+# Main fitness: 37.73553077873661
 
 # could optimise action making speed by once finished training it will predice table for all states. Would increase training a fair bit tho

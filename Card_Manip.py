@@ -2,7 +2,7 @@ import random
 
 
 def fitness(percent_win, train_time, run_time):
-    return (percent_win - ((train_time / 60) + (run_time * 10)))
+    return percent_win - ((train_time / 60) + (run_time * 10))
 
 
 class Deck:
@@ -77,24 +77,33 @@ def deal_deck(deck, hand1, hand2, hand3, hand4, how_many):
 
 
 def card_number(card):
-    # Takes a card in the form 'suitval' like 'H3' and assignes the number, with 2 of clubs as 1 and ace of spaces as 52
+    # Takes a card in the form 'suit-val' like 'H3' and assignes the number, with 2 of clubs as 0 and ace of spaces as 51
     # Suit order is club, diamond, Heart, Spade
     if card[0] == 'C':
-        # 1 to 13
+        # 0 to 12
         card_num = 0
     elif card[0] == 'D':
-        # 14 to 26
+        # 13 to 25
         card_num = 13
     elif card[0] == 'H':
-        # 27 to 39
+        # 26 to 38
         card_num = 26
     else:
-        # 40 to 52
+        # 38 to 51
         card_num = 39
-
-    card_num = card_num + (int(card[1:len(card)]) - 2)
+    card_num = card_num + (int(card[1:]) - 2)
+    # card_num = card_num + (int(card[1:len(card)]) - 1)
 
     return card_num
+
+
+def all_nums(card_val):
+    # return arracy of all 4 10's if 10 is entered
+    arr = [0, 0, 0, 0]
+    card_val = card_val - 2
+    for i in range(0, 4):
+        arr[i] = card_val + 13 * i
+    return arr
 
 # testing
 # deck = Deck()

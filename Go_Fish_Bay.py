@@ -4,11 +4,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import itertools
 import time
+from collections import defaultdict
 import tensorflow as tf
 
 
-def get_state_index(state):
-    return int(state[0]) * 15 * 15 + int(state[1]) * 15 + int(state[2])
+
 def run_time_calc():
     deckt = CM.Deck()
     handt1 = CM.Hand()
@@ -24,115 +24,93 @@ def run_time_calc():
     run_time = end_time - start_time
     return run_time
 
-def create_q_network(state_dim, action_dim):
-    model = tf.keras.Sequential([
-        tf.keras.layers.Input(shape=(state_dim,)),
-        tf.keras.layers.Dense(64, activation='relu'),
-        tf.keras.layers.Dense(64, activation='relu'),
-        tf.keras.layers.Dense(action_dim)
-    ])
-    return model
+class BeliefState:
+    def __init__(self, num_players):
+        self.num_players = num_players
+        self.deck = set(range(52))  # Represent cards as integers (0-51)
+        self.beliefs = defaultdict(float)  # Key: (player_id, card), Value: probability
 
+    def update_card_played(self, card_val, player_id):
 
-# Define the epsilon-greedy policy
-def epsilon_greedy_policy(q_values, epsilon, options, hand, hands, state, turn, opponents):
-    # Make guess
-    if random.random() < epsilon:
-        # Make random move
-        return choose_action("RR", options, opponents, hand, hands, state, turn)
-    else:
-        # Optimal action
-        action_options = []
-        # Make options in form of '22' so can be checked agaianst action space
-        for opponent in opponents:
-            for val in options:
-                action_temp = opponent
-                if int(turn) < int(opponent):
-                    action_temp = int(action_temp) - 1
-                action_options.append(str(action_temp) + str(val))
+        self.beliefs[(player_id, card)]
 
-        ordered_actions = [action_space[j] for j in np.argsort(q_values)]
+    def update_void(self, suit_given, player_id):
+        if suit_given == 'C':
+            lower = 0
+            upper = 12
+        elif suit_given == 'D':
+            lower = 13
+            upper = 25
+        elif suit_given == 'H':
+            lower = 26
+            upper = 38
+        else:  # Spade
+            lower = 29
+            upper = 51
 
-        for j in range(0, len(ordered_actions)):
-            # Loop cards to find highest valid option
-            if ordered_actions[j] in action_options:
-                target = ordered_actions[j][0]
-                if len(ordered_actions[j]) == 2:
-                    guess_val = ordered_actions[j][1]
+        for player in range(self.num_players):
+            if player != player_id:
+                for card in self.deck:
+                    if lower <= card <= upper:  # if suit then remove it
+                        if (player, card) in self.beliefs:
+                            del self.beliefs[(player, card)]
+
+    def choose_card(self, hand_class, options, following):
+        # Prioritize following suit if possible
+        hand = hand_class.cards
+
+        if following:
+            # start by calculating the firsty cards score
+            best_score = self.evaluate_card(hand[options[0]])
+            best_pos = 0
+            for i in range(1, len(options)):
+                cur_score = self.evaluate_card(hand[options[i]])
+                if cur_score >= best_score:
+                    best_score = cur_score
+                    best_pos = i
+            return hand_class.remove_card(options[best_pos])
+        else:
+            best_heart = [-1, -1]
+            other = [-1, -1]
+            for i in range(0, len(options)):
+                if hand[options[i]].suit == "S" and hand[options[i]].val == 12:
+                    return hand_class.remove_card(options[i])
+                elif hand[options[i]].suit == "H" and hand[options[i]].val > best_heart[0]:
+                    best_heart[0] = hand[options[i]].val
+                    best_heart[1] = i
                 else:
-                    guess_val = ordered_actions[j][1:]
-                return guess_val, target
+                    if hand[options[i]].val > other[0]:
+                        other[0] = hand[options[i]].val
+                        other[1] = i
+            if best_heart[0] != [-1]:
+                return hand_class.remove_card(options[best_heart[1]])
+            return hand_class.remove_card(options[other[1]])
+
+    def evaluate_card(self, card):
+        score = 0
+        if card.suit == 'H':
+            score = score + self.calculate_heart_capture_risk(card)
+        elif card.suit == 'S' and card.val == 12:  # Queen of Spades
+            score = score + self.calculate_queen_capture_risk()
+        return score
+
+    def calculate_heart_capture_risk(self, card):
+        capture_risk = 0
+        for unseen_card in self.beliefs:
+            if unseen_card != card and unseen_card.suit == 'H':
+                # Consider the probability of the unseen card being a heart
+                capture_risk = capture_risk + self.beliefs[unseen_card]
+        if card.suit == 'H':
+            # if you play a high heart, youre likely to score
+            capture_risk = capture_risk * (1 - card.val / 13)
+        return capture_risk
+
+    def calculate_queen_capture_risk(self):
+        # need to see if king and ace are left
+        return 0
 
 
-class ReplayBuffer:
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.buffer = []
-
-    def push(self, experience):
-        if len(self.buffer) >= self.capacity:
-            self.buffer.pop(0)
-        self.buffer.append(experience)
-
-    def sample(self, batch_size):
-        return random.sample(self.buffer, batch_size)
-
-
-class DQNAgent:
-    def __init__(self, state_dim, action_dim, capacity, batch_size, gamma, epsilon_start, epsilon_end, epsilon_decay,
-                 target_update):
-        self.q_network = create_q_network(state_dim, action_dim)
-        self.target_network = create_q_network(state_dim, action_dim)
-        self.target_network.set_weights(self.q_network.get_weights())
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
-        self.q_network.compile(optimizer=self.optimizer, loss='mse')
-        self.memory = ReplayBuffer(capacity)
-        self.batch_size = batch_size
-        self.gamma = gamma
-        self.epsilon = epsilon_start
-        self.epsilon_end = epsilon_end
-        self.epsilon_decay = epsilon_decay
-        self.target_update = target_update
-
-    def update_target_network(self):
-        self.target_network.set_weights(self.q_network.get_weights())
-
-    def update_model(self):
-        if len(self.memory.buffer) < self.batch_size:
-            return
-        batch = self.memory.sample(self.batch_size)
-        # states, actions, rewards, next_states, dones = batch
-
-        states = np.array([data[0] for data in batch])
-        actions = np.array([data[1] for data in batch])
-        rewards = np.array([data[2] for data in batch])
-        next_states = np.array([data[3] for data in batch])
-        dones = np.array([data[4] for data in batch])
-
-        states = np.array(states)
-        next_states = np.array(next_states)
-        q_values = self.q_network.predict(states, verbose=0)
-        next_q_values = self.target_network.predict(next_states, verbose=0)
-        for i in range(self.batch_size):
-            if dones[i]:
-                q_values[i][actions[i]] = rewards[i]
-            else:
-                q_values[i][actions[i]] = rewards[i] + self.gamma * np.max(next_q_values[i])
-        self.q_network.fit(states, q_values, verbose=0, use_multiprocessing=True)
-
-    def select_action(self, state, options, hand, hands, turn, opponents):
-        state_array = np.array(state)
-        input_shape = (3,)  # Represents two features
-        reshaped_state = np.array(state_array).reshape(input_shape)
-        reshaped_state = np.expand_dims(reshaped_state, axis=0)
-        q_values = self.q_network.predict(reshaped_state, verbose=0)
-        return epsilon_greedy_policy(q_values, self.epsilon, options, hand, hands, state, turn, opponents)
-
-    def decay_epsilon(self):
-        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
-
-
-def train_nn():
+def train_bays():
     learn_rate = 0.1
     discount_rate = 0.9
     explore_element = 0.1
@@ -502,8 +480,8 @@ def count_vals_in_hand(hand):
 
 
 def choose_action(behaviour, options, opponents_action_choice, current_hand, hands, state, turn):
-    if behaviour == "NN" and np.random.rand() < 0.05:
-        guessing_val, target_guessing = agent.select_action(state, options, current_hand, hands, turn, opponents_action_choice)
+    if behaviour == "BB" and np.random.rand() < 0.05:
+        guessing_val, target_guessing = None
     else:
         # Card Choice
         if behaviour[0] == 'R' or random.randint(1, 4) == 1 or behaviour[0] == 'N':
@@ -573,23 +551,9 @@ num_states = initialize_state_space()
 num_actions = len(action_space)
 q_table = np.zeros((num_states, num_actions))
 
-# train paramiters
-state_dim = 3
-action_dim = num_actions
-capacity = 10000
-batch_size = 64
-gamma = 0.99
-epsilon_start = 1.0
-epsilon_end = 0.01
-epsilon_decay = 0.995
-target_update = 10
-
-agent = DQNAgent(state_dim, action_dim, capacity, batch_size, gamma, epsilon_start, epsilon_end, epsilon_decay,
-                 target_update)
-
 print("Start training")
 start_time = time.time()
-train_nn()
+train_bays()
 end_time = time.time()
 train_time = end_time - start_time
 print("Trained done in", train_time, "seconds")
@@ -597,7 +561,7 @@ print("Trained done in", train_time, "seconds")
 for games in range(0, 1000):
     # Options are split into 2. R, M and L. them being Random, Most and Least.
     # Frist pos is card from hand, then oppoennent. so RR is random card, random opponent. RL is random card and oppoennt with least cards
-    b_ops = ["RR", "RM", "RL", "MR", "MM", "ML", "LR", "LM", "LL", "NN"]
+    b_ops = ["RR", "RM", "RL", "MR", "MM", "ML", "LR", "LM", "LL", "BB"]
     behaviour = []
     behaviour_num = []
     for i in range(0, 4):
@@ -665,74 +629,3 @@ ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 
 plt.show()
-
-# Scores
-# 200 rounds training, 1000 test!
-# --
-#     model = tf.keras.Sequential([
-#         tf.keras.layers.Input(shape=(state_dim,)),
-#         tf.keras.layers.Dense(64, activation='relu'),
-#         tf.keras.layers.Dense(64, activation='relu'),
-#         tf.keras.layers.Dense(action_dim)
-#     ])
-# Time taken: 1389.0456783771515 seconds
-# Performance:3.43099274 [0.1 off best]
-# Action speed: ?
-# Main fitness: ?
-# --
-#     model = tf.keras.Sequential([
-#         tf.keras.layers.Input(shape=(state_dim,)),
-#         tf.keras.layers.Dense(32, activation='relu'),
-#         tf.keras.layers.Dropout(0.2),
-#         tf.keras.layers.Dense(32, activation='relu'),
-#         tf.keras.layers.Dropout(0.2),
-#         tf.keras.layers.Dense(action_dim)
-#     ])
-# Time taken: 1388.698704957962 seconds
-# Performance: 3.45588235 [best by 0.3]
-# Action speed: ?
-# Main fitness: ?
-# --
-#     model = tf.keras.Sequential([
-#         tf.keras.layers.Input(shape=(state_dim,)),
-#         tf.keras.layers.Dense(16, activation='sigmoid'),
-#         tf.keras.layers.Dropout(0.5),
-#         tf.keras.layers.Dense(32, activation='relu'),
-#         tf.keras.layers.Dense(64, activation='relu'),
-#         tf.keras.layers.Dropout(0.5),
-#         tf.keras.layers.Dense(52, activation='sigmoid'),
-#         tf.keras.layers.Dense(action_dim)
-#     ])
-# Time taken: 1372.82106590271 seconds
-# Performance: 3.49636804
-# Action speed: 0.0
-# Main fitness: 41.28429781203313
-# --
-
-# 100 training  rounds, 1000 test:
-# --
-#     model = tf.keras.Sequential([
-#         tf.keras.layers.Input(shape=(state_dim,)),
-#         tf.keras.layers.Dense(64, activation='relu'),
-#         tf.keras.layers.Dense(64, activation='relu'),
-#         tf.keras.layers.Dense(action_dim)
-#     ])
-# Time taken: 685.2835369110107 seconds
-# Performance:3.38518519 (0.5 off best)
-# Action speed: ?
-# Main fitness: ?
-# --
-#     model = tf.keras.Sequential([
-#         tf.keras.layers.Input(shape=(state_dim,)),
-#         tf.keras.layers.Dense(16, activation='sigmoid'),
-#         tf.keras.layers.Dropout(0.5),
-#         tf.keras.layers.Dense(32, activation='relu'),
-#         tf.keras.layers.Dense(64, activation='relu'),
-#         tf.keras.layers.Dropout(0.5),
-#         tf.keras.layers.Dense(52, activation='sigmoid'),
-#         tf.keras.layers.Dense(action_dim)
-#     ])
-# Time taken:
-# Performance:
-# Action speed:
-# Main fitness:

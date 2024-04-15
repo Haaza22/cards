@@ -19,6 +19,17 @@ def calc_options(hand, given_suit):
         return options
 
 
+def calc_options_B(hand, given_suit):
+    options = []
+    for i in range(0, hand.size):
+        if hand.cards[i].suit == given_suit:
+            options.append(i)
+    if len(options) == 0:
+        return list_hand(len(hand.cards)), False
+    else:
+        return options, True
+
+
 def list_hand(hand_size):
     options = []
     for i in range(0, hand_size):
@@ -36,13 +47,14 @@ def find_winner(table):
             winner = i
     return winner
 
+
 def find_wining_card(table):
     given_suit = table[0].suit
     highest = 0
     for i in range(0, len(table)):
         if table[i].suit == given_suit and table[i].val > highest:
             highest = table[i].val
-    return str(given_suit)+str(highest)
+    return str(given_suit) + str(highest)
 
 
 def count_points(won_cards):
@@ -116,7 +128,7 @@ def round_over(who_played, on_table, won_cards, turn_record, current_turn_record
 
     turn_record.append(current_turn_record)
 
-    for i in range(2,6):
+    for i in range(2, 6):
         played_cards.append((current_turn_record[i].val, current_turn_record[i].suit))
 
     return won_cards, turn_record, round_winner, played_cards
